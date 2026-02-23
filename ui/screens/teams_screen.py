@@ -76,19 +76,15 @@ class TeamsScreen:
             self._open_editor(t)
 
         def delete_clicked(e: ft.ControlEvent, t: Team = team) -> None:
-            dlg_ref: list[ft.AlertDialog] = []
-
             def confirm(ev: ft.ControlEvent) -> None:
                 delete_team(t.name)
-                dlg_ref[0].open = False
-                self.page.update()
+                self.page.pop_dialog()
                 if self.on_change:
                     self.on_change()
                 self._refresh()
 
             def cancel(ev: ft.ControlEvent) -> None:
-                dlg_ref[0].open = False
-                self.page.update()
+                self.page.pop_dialog()
 
             dlg = ft.AlertDialog(
                 modal=True,
@@ -100,10 +96,7 @@ class TeamsScreen:
                 ],
                 actions_alignment=ft.MainAxisAlignment.END,
             )
-            dlg_ref.append(dlg)
-            self.page.overlay.append(dlg)
-            dlg.open = True
-            self.page.update()
+            self.page.show_dialog(dlg)
 
         return ft.Card(
             content=ft.Container(

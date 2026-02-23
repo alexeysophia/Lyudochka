@@ -18,7 +18,6 @@ class TeamEditor:
         self.page = page
         self.team = team
         self.on_save = on_save
-        self._dlg: ft.AlertDialog | None = None
 
     def show(self) -> None:
         is_edit = self.team is not None
@@ -68,11 +67,11 @@ class TeamEditor:
 
             if not new_name:
                 error_text.value = "Введите название команды"
-                self.page.update()
+                error_text.update()
                 return
             if not new_project:
                 error_text.value = "Введите ключ проекта Jira"
-                self.page.update()
+                error_text.update()
                 return
 
             # If renaming an existing team, remove the old file first
@@ -87,18 +86,13 @@ class TeamEditor:
                 dod_template=dod_field.value or "",
             )
             save_team(new_team)
-
-            assert self._dlg is not None
-            self._dlg.open = False
-            self.page.update()
+            self.page.pop_dialog()
             self.on_save()
 
         def cancel_clicked(e: ft.ControlEvent) -> None:
-            assert self._dlg is not None
-            self._dlg.open = False
-            self.page.update()
+            self.page.pop_dialog()
 
-        self._dlg = ft.AlertDialog(
+        dlg = ft.AlertDialog(
             modal=True,
             title=ft.Text("Редактировать команду" if is_edit else "Добавить команду"),
             content=ft.Container(
@@ -122,6 +116,4 @@ class TeamEditor:
             ],
             actions_alignment=ft.MainAxisAlignment.END,
         )
-        self.page.overlay.append(self._dlg)
-        self._dlg.open = True
-        self.page.update()
+        self.page.show_dialog(dlg)

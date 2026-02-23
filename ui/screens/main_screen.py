@@ -58,7 +58,7 @@ class MainScreen:
             options=team_options,
             hint_text="Выберите команду..." if team_options else "Добавьте команды в разделе «Команды»",
             width=320,
-            on_change=self._on_team_change,
+            on_select=self._on_team_change,
         )
 
         self._user_input = ft.TextField(

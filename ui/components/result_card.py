@@ -12,12 +12,18 @@ class ResultCard:
         jira = self.response.jira_params
         copy_text = f"{self.response.task_title}\n\n{self.response.task_text}"
 
-        def copy_clicked(e: ft.ControlEvent) -> None:
-            self.page.set_clipboard(copy_text)
-            self.page.snack_bar = ft.SnackBar(
+        async def copy_clicked(e: ft.ControlEvent) -> None:
+            cb = ft.Clipboard()
+            self.page.overlay.append(cb)
+            self.page.update()
+            await cb.set(copy_text)
+            self.page.overlay.remove(cb)
+
+            snack = ft.SnackBar(
                 content=ft.Text("Скопировано в буфер обмена"),
                 open=True,
             )
+            self.page.overlay.append(snack)
             self.page.update()
 
         controls: list[ft.Control] = [
