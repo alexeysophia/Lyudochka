@@ -1,23 +1,20 @@
-import asyncio
-
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 
 
 async def call_gemini(
     system_prompt: str,
     user_message: str,
     api_key: str,
-    model: str = "gemini-1.5-flash",
+    model: str = "gemini-2.0-flash",
 ) -> str:
     """Call Google Gemini API asynchronously and return the raw response text."""
-
-    def _sync_call() -> str:
-        genai.configure(api_key=api_key)
-        model_instance = genai.GenerativeModel(
-            model_name=model,
+    client = genai.Client(api_key=api_key)
+    response = await client.aio.models.generate_content(
+        model=model,
+        contents=user_message,
+        config=types.GenerateContentConfig(
             system_instruction=system_prompt,
-        )
-        response = model_instance.generate_content(user_message)
-        return response.text
-
-    return await asyncio.to_thread(_sync_call)
+        ),
+    )
+    return response.text
