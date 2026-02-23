@@ -1,0 +1,193 @@
+import flet as ft
+
+from core.ai_router import generate
+from data.models import AIResponse, Team
+from data.settings_store import load_settings
+from data.teams_store import load_all_teams
+from ui.components.questions_form import QuestionsForm
+from ui.components.result_card import ResultCard
+
+
+class MainScreen:
+    def __init__(self, page: ft.Page) -> None:
+        self.page = page
+        self._teams: list[Team] = []
+        self._selected_team: Team | None = None
+        self._user_input_value: str = ""
+
+        # Mutable UI refs (set in _build_content)
+        self._container: ft.Container | None = None
+        self._team_dropdown: ft.Dropdown | None = None
+        self._user_input: ft.TextField | None = None
+        self._generate_btn: ft.ElevatedButton | None = None
+        self._loading: ft.ProgressRing | None = None
+        self._error_text: ft.Text | None = None
+        self._result_area: ft.Column | None = None
+
+    # ------------------------------------------------------------------
+    # Public API
+    # ------------------------------------------------------------------
+
+    def build(self) -> ft.Control:
+        self._teams = load_all_teams()
+        self._selected_team = None
+        self._container = ft.Container(
+            padding=30,
+            content=self._build_content(),
+            expand=True,
+        )
+        return self._container
+
+    def refresh_teams(self) -> None:
+        """Reload teams list and rebuild the screen content."""
+        self._teams = load_all_teams()
+        self._selected_team = None
+        if self._container is not None:
+            self._container.content = self._build_content()
+            self.page.update()
+
+    # ------------------------------------------------------------------
+    # Private helpers
+    # ------------------------------------------------------------------
+
+    def _build_content(self) -> ft.Control:
+        team_options = [ft.dropdown.Option(t.name) for t in self._teams]
+
+        self._team_dropdown = ft.Dropdown(
+            label="Команда",
+            options=team_options,
+            hint_text="Выберите команду..." if team_options else "Добавьте команды в разделе «Команды»",
+            width=320,
+            on_change=self._on_team_change,
+        )
+
+        self._user_input = ft.TextField(
+            label="Описание задачи",
+            multiline=True,
+            min_lines=5,
+            max_lines=12,
+            hint_text="Опишите задачу своими словами — что нужно сделать и зачем...",
+            expand=True,
+        )
+
+        self._error_text = ft.Text("", color=ft.Colors.RED_400)
+        self._loading = ft.ProgressRing(visible=False, width=24, height=24)
+
+        self._generate_btn = ft.ElevatedButton(
+            "Сгенерировать",
+            icon=ft.Icons.AUTO_AWESOME,
+            on_click=self._on_generate_clicked,
+        )
+
+        self._result_area = ft.Column(controls=[], spacing=16)
+
+        return ft.Column(
+            controls=[
+                ft.Text("Создать задачу", size=24, weight=ft.FontWeight.BOLD),
+                ft.Divider(),
+                self._team_dropdown,
+                self._user_input,
+                ft.Row(
+                    controls=[
+                        self._generate_btn,
+                        self._loading,
+                        self._error_text,
+                    ],
+                    vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                    spacing=12,
+                ),
+                self._result_area,
+            ],
+            spacing=16,
+            scroll=ft.ScrollMode.AUTO,
+            expand=True,
+        )
+
+    def _on_team_change(self, e: ft.ControlEvent) -> None:
+        selected_name = e.control.value
+        self._selected_team = next(
+            (t for t in self._teams if t.name == selected_name),
+            None,
+        )
+
+    async def _on_generate_clicked(self, e: ft.ControlEvent) -> None:
+        if not self._selected_team:
+            self._show_error("Выберите команду")
+            return
+        raw = self._user_input.value if self._user_input else ""
+        if not raw or not raw.strip():
+            self._show_error("Введите описание задачи")
+            return
+
+        self._user_input_value = raw.strip()
+        await self._run_generation(self._user_input_value, None)
+
+    async def _run_generation(
+        self,
+        user_input: str,
+        answers: list[tuple[str, str]] | None,
+    ) -> None:
+        self._set_loading(True)
+        self._clear_result()
+        self._clear_error()
+
+        try:
+            settings = load_settings()
+            response = await generate(
+                team=self._selected_team,
+                user_input=user_input,
+                answers=answers,
+                settings=settings,
+            )
+            self._handle_response(response, user_input)
+        except Exception as exc:
+            self._show_error(str(exc))
+        finally:
+            self._set_loading(False)
+            self.page.update()
+
+    def _handle_response(self, response: AIResponse, user_input: str) -> None:
+        if response.status == "ready":
+            self._result_area.controls = [ResultCard(self.page, response).build()]
+
+        elif response.status == "need_clarification":
+            if not response.questions:
+                self._show_error("ИИ вернул пустой список вопросов.")
+                return
+
+            def on_answers_submitted(answers: list[tuple[str, str]]) -> None:
+                self.page.run_task(self._run_generation, user_input, answers)
+
+            form = QuestionsForm(
+                page=self.page,
+                questions=response.questions,
+                on_submit=on_answers_submitted,
+            )
+            self._result_area.controls = [form.build()]
+
+        else:
+            self._show_error(f"Неизвестный статус ответа: {response.status!r}")
+
+    # ------------------------------------------------------------------
+    # UI state helpers
+    # ------------------------------------------------------------------
+
+    def _set_loading(self, loading: bool) -> None:
+        if self._loading is not None:
+            self._loading.visible = loading
+        if self._generate_btn is not None:
+            self._generate_btn.disabled = loading
+        self.page.update()
+
+    def _show_error(self, message: str) -> None:
+        if self._error_text is not None:
+            self._error_text.value = message
+        self.page.update()
+
+    def _clear_error(self) -> None:
+        if self._error_text is not None:
+            self._error_text.value = ""
+
+    def _clear_result(self) -> None:
+        if self._result_area is not None:
+            self._result_area.controls = []
