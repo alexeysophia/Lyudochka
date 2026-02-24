@@ -223,9 +223,8 @@ class MainScreen:
         )
         save_draft(draft)
         self._clear_error()
-        self.page.show_snack_bar(
-            ft.SnackBar(content=ft.Text("Черновик сохранён"), duration=2000)
-        )
+        snack = ft.SnackBar(content=ft.Text("Черновик сохранён"), open=True)
+        self.page.overlay.append(snack)
         self.page.update()
 
     async def _run_generation(

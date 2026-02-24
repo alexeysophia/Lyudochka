@@ -48,7 +48,7 @@ class ResultCard:
                 ft.Text("Название задачи", size=11, color=ft.Colors.GREY_600),
                 ft.Container(
                     padding=ft.padding.symmetric(vertical=8, horizontal=12),
-                    bgcolor=ft.Colors.SURFACE_VARIANT,
+                    bgcolor=ft.Colors.SURFACE_CONTAINER,
                     border_radius=8,
                     content=ft.Text(
                         self.response.task_title,
@@ -64,7 +64,7 @@ class ResultCard:
                 ft.Text("Описание задачи", size=11, color=ft.Colors.GREY_600),
                 ft.Container(
                     padding=12,
-                    bgcolor=ft.Colors.SURFACE_VARIANT,
+                    bgcolor=ft.Colors.SURFACE_CONTAINER,
                     border_radius=8,
                     content=ft.Text(self.response.task_text, selectable=True),
                 ),
