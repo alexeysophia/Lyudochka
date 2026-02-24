@@ -29,21 +29,23 @@ class QuestionsForm:
 
         for i, question in enumerate(self.questions):
             field = ft.TextField(
-                label=f"Ответ {i + 1}",
                 hint_text="Введите ответ...",
                 multiline=True,
-                min_lines=2,
-                max_lines=4,
+                min_lines=3,
+                max_lines=8,
+                expand=True,
+                align_label_with_hint=True,
                 value=self._initial_answers[i] if i < len(self._initial_answers) else "",
             )
             self._answer_fields.append(field)
             question_controls.append(
                 ft.Column(
                     controls=[
-                        ft.Text(question, size=14, weight=ft.FontWeight.W_500),
+                        ft.Text(f"{i + 1}. {question}", size=14, weight=ft.FontWeight.W_500),
                         field,
                     ],
                     spacing=6,
+                    horizontal_alignment=ft.CrossAxisAlignment.STRETCH,
                 )
             )
 
@@ -87,5 +89,6 @@ class QuestionsForm:
                     ),
                 ],
                 spacing=12,
+                horizontal_alignment=ft.CrossAxisAlignment.STRETCH,
             ),
         )

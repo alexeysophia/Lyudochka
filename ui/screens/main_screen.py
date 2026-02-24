@@ -193,9 +193,11 @@ class MainScreen:
         await self._run_generation(self._user_input_value, None)
 
     def _save_draft_clicked(self, e: ft.ControlEvent) -> None:
-        user_input = self._user_input_value
-        if not user_input and self._user_input is not None:
+        # Always read current field value; _user_input_value may be stale from a previous generation
+        if self._user_input is not None:
             user_input = (self._user_input.value or "").strip()
+        else:
+            user_input = self._user_input_value
 
         if not self._selected_team:
             self._show_error("Выберите команду, чтобы сохранить черновик")
