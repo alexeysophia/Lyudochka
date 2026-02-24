@@ -73,26 +73,15 @@ class TeamEditor:
             hint_text="Опишите правила написания задач для этой команды...",
         )
 
-        def on_rules_blur(e: ft.ControlEvent) -> None:
-            try:
-                sel = rules_field.selection
-                if sel is not None and sel.base_offset is not None:
-                    _saved_sel[0] = min(sel.base_offset, sel.extent_offset or sel.base_offset)
-                    _saved_sel[1] = max(sel.base_offset, sel.extent_offset or sel.base_offset)
-            except Exception:
-                pass
+        def on_selection_change(e: ft.TextSelectionChangeEvent) -> None:
+            if e.selection.base_offset is not None:
+                _saved_sel[0] = min(e.selection.base_offset, e.selection.extent_offset or e.selection.base_offset)
+                _saved_sel[1] = max(e.selection.base_offset, e.selection.extent_offset or e.selection.base_offset)
 
-        rules_field.on_blur = on_rules_blur
+        rules_field.on_selection_change = on_selection_change
 
         def apply_format(prefix: str, suffix: str) -> None:
             value = rules_field.value or ""
-            try:
-                sel = rules_field.selection
-                if sel is not None and sel.base_offset is not None:
-                    _saved_sel[0] = min(sel.base_offset, sel.extent_offset or sel.base_offset)
-                    _saved_sel[1] = max(sel.base_offset, sel.extent_offset or sel.base_offset)
-            except Exception:
-                pass
             start = min(_saved_sel[0], len(value))
             end = min(_saved_sel[1], len(value))
             rules_field.value = (
