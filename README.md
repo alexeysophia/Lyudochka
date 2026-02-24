@@ -123,6 +123,6 @@ ui/
 
 | Пакет | Назначение |
 |---|---|
-| `flet >= 0.24` | Desktop UI |
+| `flet >= 0.80` | Desktop UI |
 | `anthropic >= 0.40` | Anthropic Claude API |
-| `google-generativeai >= 0.8` | Google Gemini API |
+| `google-genai >= 1.0` | Google Gemini API |
