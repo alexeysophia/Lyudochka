@@ -6,8 +6,8 @@ _SYSTEM_PROMPT_TEMPLATE = """\
 ## Правила команды:
 {rules}
 
-## Шаблон Definition of Done (DoD):
-{dod_template}
+## Руководитель команды:
+{team_lead}
 
 ## Проект Jira: {jira_project}
 ## Тип задачи по умолчанию: {default_task_type}
@@ -46,7 +46,7 @@ def build_system_prompt(team: Team) -> str:
     return _SYSTEM_PROMPT_TEMPLATE.format(
         team_name=team.name,
         rules=team.rules or "(правила не заданы)",
-        dod_template=team.dod_template or "(DoD не задан)",
+        team_lead=team.team_lead or "(не указан)",
         jira_project=team.jira_project,
         default_task_type=team.default_task_type,
     )

@@ -51,13 +51,10 @@ class TeamEditor:
             max_lines=8,
             hint_text="Опишите правила написания задач для этой команды...",
         )
-        dod_field = ft.TextField(
-            label="Definition of Done (DoD)",
-            value=self.team.dod_template if self.team else "",
-            multiline=True,
-            min_lines=4,
-            max_lines=8,
-            hint_text="Шаблон критериев завершения задачи...",
+        team_lead_field = ft.TextField(
+            label="Руководитель команды",
+            value=self.team.team_lead if self.team else "",
+            hint_text="например: Иван Иванов",
         )
         error_text = ft.Text("", color=ft.Colors.RED_400)
 
@@ -83,7 +80,7 @@ class TeamEditor:
                 jira_project=new_project.upper(),
                 default_task_type=task_type_dropdown.value or "Story",
                 rules=rules_field.value or "",
-                dod_template=dod_field.value or "",
+                team_lead=team_lead_field.value or "",
             )
             save_team(new_team)
             self.page.pop_dialog()
@@ -103,7 +100,7 @@ class TeamEditor:
                         project_field,
                         task_type_dropdown,
                         rules_field,
-                        dod_field,
+                        team_lead_field,
                         error_text,
                     ],
                     spacing=12,

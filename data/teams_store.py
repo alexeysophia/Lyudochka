@@ -35,7 +35,7 @@ def load_all_teams() -> list[Team]:
                     jira_project=data["jira_project"],
                     default_task_type=data["default_task_type"],
                     rules=data["rules"],
-                    dod_template=data["dod_template"],
+                    team_lead=data.get("team_lead", ""),
                 )
             )
         except (json.JSONDecodeError, KeyError, OSError):
@@ -52,7 +52,7 @@ def save_team(team: Team) -> None:
         "jira_project": team.jira_project,
         "default_task_type": team.default_task_type,
         "rules": team.rules,
-        "dod_template": team.dod_template,
+        "team_lead": team.team_lead,
     }
     with open(path, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)

@@ -7,7 +7,7 @@ class Team:
     jira_project: str       # e.g. "BACKEND"
     default_task_type: str  # e.g. "Story", "Bug", "Task"
     rules: str              # Free-form rules text shown to AI
-    dod_template: str       # Definition of Done template
+    team_lead: str          # Team lead name
 
 
 @dataclass
