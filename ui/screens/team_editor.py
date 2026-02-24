@@ -100,7 +100,7 @@ class TeamEditor:
             )
             _saved_sel[0] = _saved_sel[1] = start + len(prefix) + (end - start) + len(suffix)
             rules_field.update()
-            rules_field.focus()
+            self.page.run_task(rules_field.focus)
 
         formatting_toolbar = ft.Row(
             controls=[
