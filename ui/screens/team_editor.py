@@ -89,11 +89,11 @@ class TeamEditor:
             rules_field.focus()
 
         def on_drag_start(e: ft.DragStartEvent) -> None:
-            _drag_start_y[0] = e.global_y
+            _drag_start_y[0] = e.global_position.y
             _drag_start_lines[0] = rules_field.max_lines or 6
 
         def on_drag_update(e: ft.DragUpdateEvent) -> None:
-            delta = e.global_y - _drag_start_y[0]
+            delta = e.global_position.y - _drag_start_y[0]
             new_lines = max(3, _drag_start_lines[0] + int(delta / _LINE_HEIGHT_PX))
             rules_field.min_lines = new_lines
             rules_field.max_lines = new_lines
@@ -164,7 +164,7 @@ class TeamEditor:
             mouse_cursor=ft.MouseCursor.RESIZE_UP_DOWN,
             content=ft.Container(
                 height=14,
-                alignment=ft.alignment.center,
+                alignment=ft.Alignment(0, 0),
                 content=ft.Icon(ft.Icons.DRAG_HANDLE, size=14, color=ft.Colors.GREY_400),
                 bgcolor=ft.Colors.with_opacity(0.05, ft.Colors.ON_SURFACE),
                 border_radius=ft.BorderRadius(0, 0, 4, 4),
