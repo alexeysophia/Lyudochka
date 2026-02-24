@@ -1,3 +1,4 @@
+import asyncio
 from typing import Callable
 
 import flet as ft
@@ -160,7 +161,7 @@ class TeamEditor:
 
         error_text = ft.Text("", color=ft.Colors.RED_400)
 
-        # Keyboard shortcuts: Ctrl+B → bold, Ctrl+I → italic
+        # Keyboard shortcuts: Ctrl+B → bold, Ctrl+I → italic, Shift+End → select to last non-whitespace
         prev_keyboard_handler = self.page.on_keyboard_event
 
         def on_keyboard(e: ft.KeyboardEvent) -> None:
@@ -168,6 +169,33 @@ class TeamEditor:
                 apply_format("**", "**")
             elif e.ctrl and e.key.lower() == "i":
                 apply_format("*", "*")
+            elif e.shift and e.key == "End":
+                # Compute correct selection from text BEFORE Flutter processes the key.
+                # anchor = current cursor/selection start, captured now.
+                anchor = _saved_sel[0]
+                value = rules_field.value or ""
+
+                async def _fix_shift_end() -> None:
+                    # Find end of the current line (stop at \n or end of string)
+                    line_end = anchor
+                    while line_end < len(value) and value[line_end] != "\n":
+                        line_end += 1
+                    # Trim trailing spaces/tabs
+                    extent = line_end
+                    while extent > anchor and value[extent - 1] in (" ", "\t"):
+                        extent -= 1
+                    await asyncio.sleep(0.05)  # let Flutter finish its Shift+End
+                    try:
+                        await rules_field.focus()
+                        rules_field.selection = ft.TextSelection(
+                            base_offset=anchor,
+                            extent_offset=extent,
+                        )
+                        rules_field.update()
+                    except Exception:
+                        pass
+
+                self.page.run_task(_fix_shift_end)
 
         self.page.on_keyboard_event = on_keyboard
 

@@ -24,3 +24,15 @@ class AIResponse:
     task_title: str = ""                  # Task title (if ready)
     jira_params: dict = field(default_factory=dict)   # project, type, priority, labels (if ready)
     questions: list[str] = field(default_factory=list)  # Clarifying questions (if need_clarification)
+
+
+@dataclass
+class Draft:
+    id: str
+    created_at: str                       # ISO format datetime
+    team_name: str
+    user_input: str
+    stage: str                            # "input" | "clarification" | "ready"
+    questions: list[str] = field(default_factory=list)
+    answers: list[list[str]] = field(default_factory=list)  # [[question, answer], ...]
+    ai_response: AIResponse | None = None

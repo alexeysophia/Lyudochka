@@ -9,11 +9,19 @@ class QuestionsForm:
         page: ft.Page,
         questions: list[str],
         on_submit: Callable[[list[tuple[str, str]]], None],
+        initial_answers: list[str] | None = None,
     ) -> None:
         self.page = page
         self.questions = questions
         self.on_submit = on_submit
+        self._initial_answers = initial_answers or []
         self._answer_fields: list[ft.TextField] = []
+
+    def get_current_answers(self) -> list[tuple[str, str]]:
+        return [
+            (self.questions[i], self._answer_fields[i].value or "")
+            for i in range(len(self.questions))
+        ]
 
     def build(self) -> ft.Control:
         self._answer_fields = []
@@ -26,6 +34,7 @@ class QuestionsForm:
                 multiline=True,
                 min_lines=2,
                 max_lines=4,
+                value=self._initial_answers[i] if i < len(self._initial_answers) else "",
             )
             self._answer_fields.append(field)
             question_controls.append(
