@@ -354,6 +354,9 @@ class MainScreen:
             self._generate_btn.visible = False
         if self._back_btn is not None:
             self._back_btn.visible = True
+        if self._save_draft_btn is not None:
+            self._save_draft_btn.content = "Сохранить черновик"
+            self._save_draft_btn.icon = ft.Icons.BOOKMARK_BORDER
 
     def _set_input_view(self) -> None:
         """Switch back to input stage: restore editable fields and Generate button."""
