@@ -26,7 +26,7 @@ def _build_icon_ico() -> str:
 
 
 def main(page: ft.Page) -> None:
-    page.title = "Lyudochka — Создание задач Jira"
+    page.title = "Людочка — твой помощник заведения задач"
     page.theme_mode = ft.ThemeMode.SYSTEM
     page.window.width = 1000
     page.window.height = 700
