@@ -32,6 +32,7 @@ class MainScreen:
         self._user_input: ft.TextField | None = None
         self._generate_btn: ft.ElevatedButton | None = None
         self._back_btn: ft.TextButton | None = None
+        self._forward_btn: ft.TextButton | None = None
         self._save_draft_btn: ft.OutlinedButton | None = None
         self._loading: ft.ProgressRing | None = None
         self._error_text: ft.Text | None = None
@@ -149,6 +150,13 @@ class MainScreen:
             visible=False,
         )
 
+        self._forward_btn = ft.TextButton(
+            "Вперёд",
+            icon=ft.Icons.ARROW_FORWARD,
+            on_click=self._on_forward_clicked,
+            visible=False,
+        )
+
         self._save_draft_btn = ft.OutlinedButton(
             "Сохранить черновик",
             icon=ft.Icons.BOOKMARK_BORDER,
@@ -167,6 +175,7 @@ class MainScreen:
                     controls=[
                         self._generate_btn,
                         self._back_btn,
+                        self._forward_btn,
                         self._save_draft_btn,
                         self._loading,
                         self._error_text,
@@ -311,6 +320,8 @@ class MainScreen:
             self._generate_btn.disabled = loading
         if self._back_btn is not None:
             self._back_btn.disabled = loading
+        if self._forward_btn is not None:
+            self._forward_btn.disabled = loading
         if self._save_draft_btn is not None:
             self._save_draft_btn.disabled = loading
         self.page.update()
@@ -338,6 +349,8 @@ class MainScreen:
             self._generate_btn.visible = False
         if self._back_btn is not None:
             self._back_btn.visible = True
+        if self._forward_btn is not None:
+            self._forward_btn.visible = False
         if self._save_draft_btn is not None:
             self._save_draft_btn.content = "Сохранить"
             self._save_draft_btn.icon = ft.Icons.SAVE
@@ -354,6 +367,8 @@ class MainScreen:
             self._generate_btn.visible = False
         if self._back_btn is not None:
             self._back_btn.visible = True
+        if self._forward_btn is not None:
+            self._forward_btn.visible = self._current_ai_response is not None
         if self._save_draft_btn is not None:
             self._save_draft_btn.content = "Сохранить черновик"
             self._save_draft_btn.icon = ft.Icons.BOOKMARK_BORDER
@@ -370,6 +385,8 @@ class MainScreen:
             self._generate_btn.visible = True
         if self._back_btn is not None:
             self._back_btn.visible = False
+        if self._forward_btn is not None:
+            self._forward_btn.visible = bool(self._current_questions)
         if self._save_draft_btn is not None:
             self._save_draft_btn.content = "Сохранить черновик"
             self._save_draft_btn.icon = ft.Icons.BOOKMARK_BORDER
@@ -378,7 +395,7 @@ class MainScreen:
         """Back from clarification → input; back from ready → clarification or input."""
         if self._stage == "clarification":
             self._stage = "input"
-            self._current_questions = []
+            # Keep _current_questions so Forward button can restore clarification.
             self._current_questions_form = None
             self._set_input_view()
             self._clear_result()
@@ -386,7 +403,7 @@ class MainScreen:
             return
 
         # From ready stage: go back to clarification (with previous answers) or input
-        self._current_ai_response = None
+        # Keep _current_ai_response so Forward button can restore the ready page.
 
         if self._current_questions:
             self._stage = "clarification"
@@ -414,5 +431,40 @@ class MainScreen:
             self._stage = "input"
             self._set_input_view()
             self._clear_result()
+
+        self.page.update()
+
+    def _on_forward_clicked(self, e: ft.ControlEvent) -> None:
+        """Forward from input → clarification; from clarification → ready."""
+        if self._stage == "input" and self._current_questions:
+            self._stage = "clarification"
+            initial_answers = [
+                a[1] if len(a) > 1 else "" for a in self._last_submitted_answers
+            ]
+
+            def on_answers_submitted(answers: list[tuple[str, str]]) -> None:
+                self._last_submitted_answers = [[q, a] for q, a in answers]
+                self.page.run_task(
+                    self._run_generation, self._user_input_value, answers
+                )
+
+            form = QuestionsForm(
+                page=self.page,
+                questions=self._current_questions,
+                on_submit=on_answers_submitted,
+                initial_answers=initial_answers,
+            )
+            self._current_questions_form = form
+            self._set_clarification_view()
+            if self._result_area is not None:
+                self._result_area.controls = [form.build()]
+
+        elif self._stage == "clarification" and self._current_ai_response is not None:
+            self._stage = "ready"
+            self._set_ready_view()
+            if self._result_area is not None:
+                self._result_area.controls = [
+                    ResultCard(self.page, self._current_ai_response).build()
+                ]
 
         self.page.update()
