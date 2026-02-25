@@ -36,6 +36,7 @@ class MainScreen:
         self._save_draft_btn: ft.OutlinedButton | None = None
         self._loading: ft.ProgressRing | None = None
         self._error_text: ft.Text | None = None
+        self._generate_row: ft.Row | None = None
         self._result_area: ft.Column | None = None
 
     # ------------------------------------------------------------------
@@ -169,20 +170,19 @@ class MainScreen:
             controls=[
                 ft.Text("Создать задачу", size=24, weight=ft.FontWeight.BOLD),
                 ft.Divider(),
-                self._team_dropdown,
-                self._user_input,
                 ft.Row(
                     controls=[
-                        self._generate_btn,
+                        self._team_dropdown,
+                        ft.Container(expand=True),
                         self._back_btn,
                         self._forward_btn,
                         self._save_draft_btn,
-                        self._loading,
-                        self._error_text,
                     ],
                     vertical_alignment=ft.CrossAxisAlignment.CENTER,
-                    spacing=12,
+                    spacing=8,
                 ),
+                self._user_input,
+                self._make_generate_row(),
                 self._result_area,
             ],
             spacing=16,
@@ -339,6 +339,18 @@ class MainScreen:
         if self._result_area is not None:
             self._result_area.controls = []
 
+    def _make_generate_row(self) -> ft.Row:
+        self._generate_row = ft.Row(
+            controls=[
+                self._generate_btn,
+                self._loading,
+                self._error_text,
+            ],
+            vertical_alignment=ft.CrossAxisAlignment.CENTER,
+            spacing=12,
+        )
+        return self._generate_row
+
     def _set_ready_view(self) -> None:
         """Switch to ready stage: hide input fields, show Back button, rename Save."""
         if self._team_dropdown is not None:
@@ -347,13 +359,15 @@ class MainScreen:
             self._user_input.visible = False
         if self._generate_btn is not None:
             self._generate_btn.visible = False
+        if self._generate_row is not None:
+            self._generate_row.visible = False
         if self._back_btn is not None:
             self._back_btn.visible = True
         if self._forward_btn is not None:
             self._forward_btn.visible = False
         if self._save_draft_btn is not None:
             self._save_draft_btn.content = "Сохранить"
-            self._save_draft_btn.icon = ft.Icons.SAVE
+            self._save_draft_btn.icon = ft.Icons.BOOKMARK_BORDER
 
     def _set_clarification_view(self) -> None:
         """Switch to clarification stage: make inputs read-only, show Back button."""
@@ -365,6 +379,8 @@ class MainScreen:
             self._user_input.disabled = True
         if self._generate_btn is not None:
             self._generate_btn.visible = False
+        if self._generate_row is not None:
+            self._generate_row.visible = False
         if self._back_btn is not None:
             self._back_btn.visible = True
         if self._forward_btn is not None:
@@ -383,6 +399,8 @@ class MainScreen:
             self._user_input.disabled = False
         if self._generate_btn is not None:
             self._generate_btn.visible = True
+        if self._generate_row is not None:
+            self._generate_row.visible = True
         if self._back_btn is not None:
             self._back_btn.visible = False
         if self._forward_btn is not None:
