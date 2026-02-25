@@ -20,7 +20,7 @@ class AppShell:
 
         self._screens: list = [
             self._main_screen,      # 0 — Создать задачу
-            self._drafts_screen,    # 1 — Черновики
+            self._drafts_screen,    # 1 — Сохраненные
             self._teams_screen,     # 2 — Команды
             self._settings_screen,  # 3 — Настройки
         ]
@@ -39,7 +39,7 @@ class AppShell:
                 ft.NavigationRailDestination(
                     icon=ft.Icons.BOOKMARK_BORDER,
                     selected_icon=ft.Icons.BOOKMARK,
-                    label="Черновики",
+                    label="Сохраненные",
                 ),
                 ft.NavigationRailDestination(
                     icon=ft.Icons.GROUPS_OUTLINED,

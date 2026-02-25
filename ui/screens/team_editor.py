@@ -62,35 +62,43 @@ class TeamEditor:
             ],
         )
 
-        # --- Rules field: auto-grows with content, dialog scrolls ---
+        # --- Rules state ---
+        _rules_text: list[str] = [self.team.rules if self.team else ""]
+        # Start in edit mode if no rules yet, otherwise show rendered view
+        _rules_edit_mode: list[bool] = [not bool(_rules_text[0])]
         _saved_sel: list[int] = [0, 0]
+        _rules_field: list[ft.TextField | None] = [None]
 
-        rules_field = ft.TextField(
-            label="Правила команды",
-            value=self.team.rules if self.team else "",
-            multiline=True,
-            min_lines=10,
-            align_label_with_hint=True,
-            hint_text="Опишите правила написания задач для этой команды...",
-        )
+        # --- Formatting helpers ---
 
         def on_selection_change(e: ft.TextSelectionChangeEvent) -> None:
             if e.selection.base_offset is not None:
-                _saved_sel[0] = min(e.selection.base_offset, e.selection.extent_offset or e.selection.base_offset)
-                _saved_sel[1] = max(e.selection.base_offset, e.selection.extent_offset or e.selection.base_offset)
-
-        rules_field.on_selection_change = on_selection_change
+                _saved_sel[0] = min(
+                    e.selection.base_offset,
+                    e.selection.extent_offset or e.selection.base_offset,
+                )
+                _saved_sel[1] = max(
+                    e.selection.base_offset,
+                    e.selection.extent_offset or e.selection.base_offset,
+                )
 
         def apply_format(prefix: str, suffix: str) -> None:
-            value = rules_field.value or ""
+            field = _rules_field[0]
+            if field is None:
+                return
+            value = field.value or ""
             start = min(_saved_sel[0], len(value))
             end = min(_saved_sel[1], len(value))
-            rules_field.value = (
+            field.value = (
                 value[:start] + prefix + value[start:end] + suffix + value[end:]
             )
-            _saved_sel[0] = _saved_sel[1] = start + len(prefix) + (end - start) + len(suffix)
-            rules_field.update()
-            self.page.run_task(rules_field.focus)
+            _saved_sel[0] = _saved_sel[1] = (
+                start + len(prefix) + (end - start) + len(suffix)
+            )
+            field.update()
+            self.page.run_task(field.focus)
+
+        # --- Formatting toolbar (shown only in edit mode) ---
 
         formatting_toolbar = ft.Row(
             controls=[
@@ -116,41 +124,25 @@ class TeamEditor:
                     style=ft.ButtonStyle(padding=ft.padding.all(4)),
                 ),
                 ft.IconButton(
+                    icon=ft.Icons.FORMAT_UNDERLINED,
+                    tooltip="Подчёркнутый (<u>текст</u>)  Ctrl+U",
+                    on_click=lambda e: apply_format("<u>", "</u>"),
+                    icon_size=18,
+                    style=ft.ButtonStyle(padding=ft.padding.all(4)),
+                ),
+                ft.IconButton(
+                    icon=ft.Icons.FORMAT_STRIKETHROUGH,
+                    tooltip="Зачёркнутый (~~текст~~)",
+                    on_click=lambda e: apply_format("~~", "~~"),
+                    icon_size=18,
+                    style=ft.ButtonStyle(padding=ft.padding.all(4)),
+                ),
+                ft.IconButton(
                     icon=ft.Icons.FORMAT_LIST_BULLETED,
                     tooltip="Список (- пункт)",
                     on_click=lambda e: apply_format("\n- ", ""),
                     icon_size=18,
                     style=ft.ButtonStyle(padding=ft.padding.all(4)),
-                ),
-                ft.PopupMenuButton(
-                    icon=ft.Icons.FORMAT_COLOR_TEXT,
-                    tooltip="Цвет текста",
-                    items=[
-                        ft.PopupMenuItem(
-                            content=ft.Text("🔴 Красный"),
-                            on_click=lambda e: apply_format(
-                                '<span style="color:red">', "</span>"
-                            ),
-                        ),
-                        ft.PopupMenuItem(
-                            content=ft.Text("🔵 Синий"),
-                            on_click=lambda e: apply_format(
-                                '<span style="color:blue">', "</span>"
-                            ),
-                        ),
-                        ft.PopupMenuItem(
-                            content=ft.Text("🟢 Зелёный"),
-                            on_click=lambda e: apply_format(
-                                '<span style="color:green">', "</span>"
-                            ),
-                        ),
-                        ft.PopupMenuItem(
-                            content=ft.Text("🟠 Оранжевый"),
-                            on_click=lambda e: apply_format(
-                                '<span style="color:orange">', "</span>"
-                            ),
-                        ),
-                    ],
                 ),
                 ft.VerticalDivider(width=12),
                 ft.Text("Markdown", size=11, color=ft.Colors.GREY_500, italic=True),
@@ -159,39 +151,121 @@ class TeamEditor:
             vertical_alignment=ft.CrossAxisAlignment.CENTER,
         )
 
+        # --- Rules area builders ---
+
+        def _build_rules_edit_content() -> ft.Control:
+            field = ft.TextField(
+                value=_rules_text[0],
+                multiline=True,
+                min_lines=10,
+                align_label_with_hint=True,
+                hint_text="Опишите правила написания задач для этой команды...",
+            )
+            field.on_selection_change = on_selection_change
+            _rules_field[0] = field
+            return ft.Column(
+                controls=[formatting_toolbar, field],
+                spacing=4,
+                horizontal_alignment=ft.CrossAxisAlignment.STRETCH,
+            )
+
+        def _build_rules_view_content() -> ft.Control:
+            _rules_field[0] = None
+            if _rules_text[0]:
+                return ft.Container(
+                    padding=12,
+                    bgcolor=ft.Colors.SURFACE_CONTAINER,
+                    border_radius=8,
+                    content=ft.Markdown(
+                        value=_rules_text[0],
+                        selectable=True,
+                        extension_set=ft.MarkdownExtensionSet.GITHUB_WEB,
+                        soft_line_break=True,
+                        expand=True,
+                    ),
+                )
+            return ft.Container(
+                padding=12,
+                bgcolor=ft.Colors.SURFACE_CONTAINER,
+                border_radius=8,
+                content=ft.Text(
+                    "Правила не заданы. Нажмите «Редактировать», чтобы добавить.",
+                    color=ft.Colors.GREY_500,
+                    italic=True,
+                    size=13,
+                ),
+            )
+
+        _rules_area = ft.Container(
+            content=(
+                _build_rules_edit_content()
+                if _rules_edit_mode[0]
+                else _build_rules_view_content()
+            ),
+        )
+
+        # --- Edit / Save button ---
+
+        edit_rules_btn = ft.IconButton(
+            icon=ft.Icons.EDIT_OUTLINED if not _rules_edit_mode[0] else ft.Icons.CHECK,
+            tooltip="Редактировать" if not _rules_edit_mode[0] else "Сохранить изменения",
+        )
+
+        def toggle_rules_edit(e: ft.ControlEvent) -> None:
+            if _rules_edit_mode[0]:
+                if _rules_field[0] is not None:
+                    _rules_text[0] = _rules_field[0].value or ""
+                _rules_edit_mode[0] = False
+                edit_rules_btn.icon = ft.Icons.EDIT_OUTLINED
+                edit_rules_btn.tooltip = "Редактировать"
+                _rules_area.content = _build_rules_view_content()
+            else:
+                _rules_edit_mode[0] = True
+                edit_rules_btn.icon = ft.Icons.CHECK
+                edit_rules_btn.tooltip = "Сохранить изменения"
+                _rules_area.content = _build_rules_edit_content()
+            _rules_area.update()
+            edit_rules_btn.update()
+
+        edit_rules_btn.on_click = toggle_rules_edit
+
         error_text = ft.Text("", color=ft.Colors.RED_400)
 
-        # Keyboard shortcuts: Ctrl+B → bold, Ctrl+I → italic, Shift+End → select to last non-whitespace
+        # Keyboard shortcuts: Ctrl+B/I/U → format; Shift+End → smart select
+        # Only active in edit mode
         prev_keyboard_handler = self.page.on_keyboard_event
 
         def on_keyboard(e: ft.KeyboardEvent) -> None:
+            if not _rules_edit_mode[0]:
+                return
             if e.ctrl and e.key.lower() == "b":
                 apply_format("**", "**")
             elif e.ctrl and e.key.lower() == "i":
                 apply_format("*", "*")
+            elif e.ctrl and e.key.lower() == "u":
+                apply_format("<u>", "</u>")
             elif e.shift and e.key == "End":
-                # Compute correct selection from text BEFORE Flutter processes the key.
-                # anchor = current cursor/selection start, captured now.
+                field = _rules_field[0]
+                if field is None:
+                    return
                 anchor = _saved_sel[0]
-                value = rules_field.value or ""
+                value = field.value or ""
 
                 async def _fix_shift_end() -> None:
-                    # Find end of the current line (stop at \n or end of string)
                     line_end = anchor
                     while line_end < len(value) and value[line_end] != "\n":
                         line_end += 1
-                    # Trim trailing spaces/tabs
                     extent = line_end
                     while extent > anchor and value[extent - 1] in (" ", "\t"):
                         extent -= 1
-                    await asyncio.sleep(0.05)  # let Flutter finish its Shift+End
+                    await asyncio.sleep(0.05)
                     try:
-                        await rules_field.focus()
-                        rules_field.selection = ft.TextSelection(
+                        await field.focus()
+                        field.selection = ft.TextSelection(
                             base_offset=anchor,
                             extent_offset=extent,
                         )
-                        rules_field.update()
+                        field.update()
                     except Exception:
                         pass
 
@@ -201,6 +275,11 @@ class TeamEditor:
 
         def _restore_keyboard() -> None:
             self.page.on_keyboard_event = prev_keyboard_handler
+
+        def _get_current_rules() -> str:
+            if _rules_edit_mode[0] and _rules_field[0] is not None:
+                return _rules_field[0].value or ""
+            return _rules_text[0]
 
         def save_clicked(e: ft.ControlEvent) -> None:
             new_name = (name_field.value or "").strip()
@@ -226,7 +305,7 @@ class TeamEditor:
                 name=new_name,
                 jira_project=new_project.upper(),
                 default_task_type=task_type_dropdown.value or "Story",
-                rules=rules_field.value or "",
+                rules=_get_current_rules(),
                 team_lead=team_lead_field.value or "",
             )
             save_team(new_team)
@@ -260,8 +339,19 @@ class TeamEditor:
                             controls=[project_field, task_type_dropdown],
                             spacing=12,
                         ),
-                        formatting_toolbar,
-                        rules_field,
+                        ft.Row(
+                            controls=[
+                                ft.Text(
+                                    "Правила команды",
+                                    size=13,
+                                    weight=ft.FontWeight.W_500,
+                                ),
+                                ft.Container(expand=True),
+                                edit_rules_btn,
+                            ],
+                            vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                        ),
+                        _rules_area,
                         error_text,
                     ],
                     spacing=12,

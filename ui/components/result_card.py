@@ -9,9 +9,96 @@ class ResultCard:
         self.response = response
         self._task_text = response.task_text
         self._edit_mode = False
+        self._saved_sel: list[int] = [0, 0]
         self._text_container: ft.Container | None = None
         self._edit_field: ft.TextField | None = None
         self._edit_btn: ft.IconButton | None = None
+
+    # ------------------------------------------------------------------
+    # Formatting helpers
+    # ------------------------------------------------------------------
+
+    def _on_selection_change(self, e: ft.TextSelectionChangeEvent) -> None:
+        if e.selection.base_offset is not None:
+            self._saved_sel[0] = min(
+                e.selection.base_offset,
+                e.selection.extent_offset or e.selection.base_offset,
+            )
+            self._saved_sel[1] = max(
+                e.selection.base_offset,
+                e.selection.extent_offset or e.selection.base_offset,
+            )
+
+    def _apply_format(self, prefix: str, suffix: str) -> None:
+        field = self._edit_field
+        if field is None:
+            return
+        value = field.value or ""
+        start = min(self._saved_sel[0], len(value))
+        end = min(self._saved_sel[1], len(value))
+        field.value = value[:start] + prefix + value[start:end] + suffix + value[end:]
+        self._saved_sel[0] = self._saved_sel[1] = (
+            start + len(prefix) + (end - start) + len(suffix)
+        )
+        field.update()
+        self.page.run_task(field.focus)
+
+    def _build_formatting_toolbar(self) -> ft.Row:
+        af = self._apply_format
+        return ft.Row(
+            controls=[
+                ft.IconButton(
+                    icon=ft.Icons.FORMAT_BOLD,
+                    tooltip="Жирный (**текст**)",
+                    on_click=lambda e: af("**", "**"),
+                    icon_size=18,
+                    style=ft.ButtonStyle(padding=ft.padding.all(4)),
+                ),
+                ft.IconButton(
+                    icon=ft.Icons.FORMAT_ITALIC,
+                    tooltip="Курсив (*текст*)",
+                    on_click=lambda e: af("*", "*"),
+                    icon_size=18,
+                    style=ft.ButtonStyle(padding=ft.padding.all(4)),
+                ),
+                ft.IconButton(
+                    icon=ft.Icons.CODE,
+                    tooltip="Код (`текст`)",
+                    on_click=lambda e: af("`", "`"),
+                    icon_size=18,
+                    style=ft.ButtonStyle(padding=ft.padding.all(4)),
+                ),
+                ft.IconButton(
+                    icon=ft.Icons.FORMAT_UNDERLINED,
+                    tooltip="Подчёркнутый (<u>текст</u>)",
+                    on_click=lambda e: af("<u>", "</u>"),
+                    icon_size=18,
+                    style=ft.ButtonStyle(padding=ft.padding.all(4)),
+                ),
+                ft.IconButton(
+                    icon=ft.Icons.FORMAT_STRIKETHROUGH,
+                    tooltip="Зачёркнутый (~~текст~~)",
+                    on_click=lambda e: af("~~", "~~"),
+                    icon_size=18,
+                    style=ft.ButtonStyle(padding=ft.padding.all(4)),
+                ),
+                ft.IconButton(
+                    icon=ft.Icons.FORMAT_LIST_BULLETED,
+                    tooltip="Список (- пункт)",
+                    on_click=lambda e: af("\n- ", ""),
+                    icon_size=18,
+                    style=ft.ButtonStyle(padding=ft.padding.all(4)),
+                ),
+                ft.VerticalDivider(width=12),
+                ft.Text("Markdown", size=11, color=ft.Colors.GREY_500, italic=True),
+            ],
+            spacing=0,
+            vertical_alignment=ft.CrossAxisAlignment.CENTER,
+        )
+
+    # ------------------------------------------------------------------
+    # Build
+    # ------------------------------------------------------------------
 
     def build(self) -> ft.Control:
         jira = self.response.jira_params
@@ -126,13 +213,24 @@ class ResultCard:
                 border=ft.InputBorder.NONE,
                 expand=True,
             )
-            return self._edit_field
+            self._edit_field.on_selection_change = self._on_selection_change
+            self._saved_sel = [0, 0]
+            return ft.Column(
+                controls=[
+                    self._build_formatting_toolbar(),
+                    ft.Divider(height=1, color="#C3C7CF"),
+                    self._edit_field,
+                ],
+                spacing=4,
+                horizontal_alignment=ft.CrossAxisAlignment.STRETCH,
+            )
         else:
             self._edit_field = None
             return ft.Markdown(
                 value=self._task_text,
                 selectable=True,
                 extension_set=ft.MarkdownExtensionSet.GITHUB_WEB,
+                soft_line_break=True,
                 expand=True,
             )
 

@@ -24,12 +24,14 @@ class MainScreen:
         self._current_questions: list[str] = []
         self._current_questions_form: QuestionsForm | None = None
         self._current_ai_response: AIResponse | None = None
+        self._last_submitted_answers: list[list[str]] = []
 
         # Mutable UI refs (set in build / _build_content)
         self._container: ft.Container | None = None
         self._team_dropdown: ft.Dropdown | None = None
         self._user_input: ft.TextField | None = None
         self._generate_btn: ft.ElevatedButton | None = None
+        self._back_btn: ft.TextButton | None = None
         self._save_draft_btn: ft.OutlinedButton | None = None
         self._loading: ft.ProgressRing | None = None
         self._error_text: ft.Text | None = None
@@ -100,6 +102,7 @@ class MainScreen:
                 self._result_area.controls = [form.build()]
 
         elif draft.stage == "ready" and draft.ai_response is not None:
+            self._set_ready_view()
             if self._result_area is not None:
                 self._result_area.controls = [
                     ResultCard(self.page, draft.ai_response).build()
@@ -138,6 +141,13 @@ class MainScreen:
             on_click=self._on_generate_clicked,
         )
 
+        self._back_btn = ft.TextButton(
+            "Назад",
+            icon=ft.Icons.ARROW_BACK,
+            on_click=self._on_back_clicked,
+            visible=False,
+        )
+
         self._save_draft_btn = ft.OutlinedButton(
             "Сохранить черновик",
             icon=ft.Icons.BOOKMARK_BORDER,
@@ -155,6 +165,7 @@ class MainScreen:
                 ft.Row(
                     controls=[
                         self._generate_btn,
+                        self._back_btn,
                         self._save_draft_btn,
                         self._loading,
                         self._error_text,
@@ -193,8 +204,11 @@ class MainScreen:
         await self._run_generation(self._user_input_value, None)
 
     def _save_draft_clicked(self, e: ft.ControlEvent) -> None:
-        # Always read current field value; _user_input_value may be stale from a previous generation
-        if self._user_input is not None:
+        # In ready stage use the stored value (input field is hidden but value is preserved).
+        # For input/clarification stages read live from the field so we catch any edits.
+        if self._stage == "ready":
+            user_input = self._user_input_value
+        elif self._user_input is not None:
             user_input = (self._user_input.value or "").strip()
         else:
             user_input = self._user_input_value
@@ -225,7 +239,8 @@ class MainScreen:
         )
         save_draft(draft)
         self._clear_error()
-        snack = ft.SnackBar(content=ft.Text("Черновик сохранён"), open=True)
+        msg = "Сохранено" if self._stage == "ready" else "Черновик сохранён"
+        snack = ft.SnackBar(content=ft.Text(msg), open=True)
         self.page.overlay.append(snack)
         self.page.update()
 
@@ -257,6 +272,7 @@ class MainScreen:
         if response.status == "ready":
             self._stage = "ready"
             self._current_ai_response = response
+            self._set_ready_view()
             self._result_area.controls = [ResultCard(self.page, response).build()]
 
         elif response.status == "need_clarification":
@@ -268,6 +284,7 @@ class MainScreen:
             self._current_questions = response.questions
 
             def on_answers_submitted(answers: list[tuple[str, str]]) -> None:
+                self._last_submitted_answers = [[q, a] for q, a in answers]
                 self.page.run_task(self._run_generation, user_input, answers)
 
             form = QuestionsForm(
@@ -290,6 +307,8 @@ class MainScreen:
             self._loading.visible = loading
         if self._generate_btn is not None:
             self._generate_btn.disabled = loading
+        if self._back_btn is not None:
+            self._back_btn.disabled = loading
         if self._save_draft_btn is not None:
             self._save_draft_btn.disabled = loading
         self.page.update()
@@ -306,3 +325,63 @@ class MainScreen:
     def _clear_result(self) -> None:
         if self._result_area is not None:
             self._result_area.controls = []
+
+    def _set_ready_view(self) -> None:
+        """Switch to ready stage: hide input fields, show Back button, rename Save."""
+        if self._team_dropdown is not None:
+            self._team_dropdown.visible = False
+        if self._user_input is not None:
+            self._user_input.visible = False
+        if self._generate_btn is not None:
+            self._generate_btn.visible = False
+        if self._back_btn is not None:
+            self._back_btn.visible = True
+        if self._save_draft_btn is not None:
+            self._save_draft_btn.content = "Сохранить"
+            self._save_draft_btn.icon = ft.Icons.SAVE
+
+    def _set_input_view(self) -> None:
+        """Switch back to input/clarification stage: restore input fields and buttons."""
+        if self._team_dropdown is not None:
+            self._team_dropdown.visible = True
+        if self._user_input is not None:
+            self._user_input.visible = True
+        if self._generate_btn is not None:
+            self._generate_btn.visible = True
+        if self._back_btn is not None:
+            self._back_btn.visible = False
+        if self._save_draft_btn is not None:
+            self._save_draft_btn.content = "Сохранить черновик"
+            self._save_draft_btn.icon = ft.Icons.BOOKMARK_BORDER
+
+    def _on_back_clicked(self, e: ft.ControlEvent) -> None:
+        """Go back to clarification form (with previous answers) or input."""
+        self._current_ai_response = None
+        self._set_input_view()
+
+        if self._current_questions:
+            self._stage = "clarification"
+            initial_answers = [
+                a[1] if len(a) > 1 else "" for a in self._last_submitted_answers
+            ]
+
+            def on_answers_submitted(answers: list[tuple[str, str]]) -> None:
+                self._last_submitted_answers = [[q, a] for q, a in answers]
+                self.page.run_task(
+                    self._run_generation, self._user_input_value, answers
+                )
+
+            form = QuestionsForm(
+                page=self.page,
+                questions=self._current_questions,
+                on_submit=on_answers_submitted,
+                initial_answers=initial_answers,
+            )
+            self._current_questions_form = form
+            if self._result_area is not None:
+                self._result_area.controls = [form.build()]
+        else:
+            self._stage = "input"
+            self._clear_result()
+
+        self.page.update()
