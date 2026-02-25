@@ -1,4 +1,15 @@
+import subprocess
+
 import flet as ft
+
+
+def _copy_to_clipboard(text: str) -> None:
+    proc = subprocess.Popen(
+        "clip",
+        stdin=subprocess.PIPE,
+        creationflags=subprocess.CREATE_NO_WINDOW,
+    )
+    proc.communicate(input=text.encode("utf-16"))
 
 from data.models import AIResponse
 
@@ -105,11 +116,7 @@ class ResultCard:
 
         async def copy_clicked(e: ft.ControlEvent) -> None:
             copy_text = f"{self.response.task_title}\n\n{self._task_text}"
-            cb = ft.Clipboard()
-            self.page.overlay.append(cb)
-            self.page.update()
-            await cb.set(copy_text)
-            self.page.overlay.remove(cb)
+            _copy_to_clipboard(copy_text)
             snack = ft.SnackBar(
                 content=ft.Text("Скопировано в буфер обмена"), open=True
             )

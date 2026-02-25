@@ -84,6 +84,7 @@ class MainScreen:
             self._user_input.value = draft.user_input
 
         if draft.stage == "clarification" and draft.questions:
+            self._set_clarification_view()
             initial_answers = [
                 a[1] if len(a) > 1 else "" for a in draft.answers
             ]
@@ -282,6 +283,7 @@ class MainScreen:
 
             self._stage = "clarification"
             self._current_questions = response.questions
+            self._set_clarification_view()
 
             def on_answers_submitted(answers: list[tuple[str, str]]) -> None:
                 self._last_submitted_answers = [[q, a] for q, a in answers]
@@ -340,12 +342,27 @@ class MainScreen:
             self._save_draft_btn.content = "Сохранить"
             self._save_draft_btn.icon = ft.Icons.SAVE
 
-    def _set_input_view(self) -> None:
-        """Switch back to input/clarification stage: restore input fields and buttons."""
+    def _set_clarification_view(self) -> None:
+        """Switch to clarification stage: make inputs read-only, show Back button."""
         if self._team_dropdown is not None:
             self._team_dropdown.visible = True
+            self._team_dropdown.disabled = True
         if self._user_input is not None:
             self._user_input.visible = True
+            self._user_input.disabled = True
+        if self._generate_btn is not None:
+            self._generate_btn.visible = False
+        if self._back_btn is not None:
+            self._back_btn.visible = True
+
+    def _set_input_view(self) -> None:
+        """Switch back to input stage: restore editable fields and Generate button."""
+        if self._team_dropdown is not None:
+            self._team_dropdown.visible = True
+            self._team_dropdown.disabled = False
+        if self._user_input is not None:
+            self._user_input.visible = True
+            self._user_input.disabled = False
         if self._generate_btn is not None:
             self._generate_btn.visible = True
         if self._back_btn is not None:
@@ -355,9 +372,18 @@ class MainScreen:
             self._save_draft_btn.icon = ft.Icons.BOOKMARK_BORDER
 
     def _on_back_clicked(self, e: ft.ControlEvent) -> None:
-        """Go back to clarification form (with previous answers) or input."""
+        """Back from clarification → input; back from ready → clarification or input."""
+        if self._stage == "clarification":
+            self._stage = "input"
+            self._current_questions = []
+            self._current_questions_form = None
+            self._set_input_view()
+            self._clear_result()
+            self.page.update()
+            return
+
+        # From ready stage: go back to clarification (with previous answers) or input
         self._current_ai_response = None
-        self._set_input_view()
 
         if self._current_questions:
             self._stage = "clarification"
@@ -378,10 +404,12 @@ class MainScreen:
                 initial_answers=initial_answers,
             )
             self._current_questions_form = form
+            self._set_clarification_view()
             if self._result_area is not None:
                 self._result_area.controls = [form.build()]
         else:
             self._stage = "input"
+            self._set_input_view()
             self._clear_result()
 
         self.page.update()

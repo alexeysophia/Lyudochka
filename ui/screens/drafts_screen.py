@@ -36,7 +36,7 @@ class DraftsScreen:
 
         header = ft.Column(
             controls=[
-                ft.Text("Черновики", size=24, weight=ft.FontWeight.BOLD),
+                ft.Text("Сохраненные задачи", size=24, weight=ft.FontWeight.BOLD),
                 ft.Divider(),
             ],
             spacing=8,
