@@ -8,6 +8,7 @@ class Team:
     default_task_type: str  # e.g. "Story", "Bug", "Task"
     rules: str              # Free-form rules text shown to AI
     team_lead: str          # Team lead name
+    context: str = ""       # Team context: products, responsibilities
 
 
 @dataclass

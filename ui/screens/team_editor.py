@@ -62,6 +62,17 @@ class TeamEditor:
             ],
         )
 
+        context_field = ft.TextField(
+            label="Контекст команды",
+            value=self.team.context if self.team else "",
+            hint_text="Опишите с какими продуктами работает команда и какие задачи выполняет...",
+            multiline=True,
+            min_lines=3,
+            max_lines=6,
+            align_label_with_hint=True,
+            content_padding=_field_padding,
+        )
+
         # --- Rules state ---
         _rules_text: list[str] = [self.team.rules if self.team else ""]
         # Start in edit mode if no rules yet, otherwise show rendered view
@@ -307,6 +318,7 @@ class TeamEditor:
                 default_task_type=task_type_dropdown.value or "Story",
                 rules=_get_current_rules(),
                 team_lead=team_lead_field.value or "",
+                context=context_field.value or "",
             )
             save_team(new_team)
             _restore_keyboard()
@@ -352,6 +364,7 @@ class TeamEditor:
                             vertical_alignment=ft.CrossAxisAlignment.CENTER,
                         ),
                         _rules_area,
+                        context_field,
                         error_text,
                     ],
                     spacing=12,

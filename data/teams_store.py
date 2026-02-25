@@ -36,6 +36,7 @@ def load_all_teams() -> list[Team]:
                     default_task_type=data["default_task_type"],
                     rules=data["rules"],
                     team_lead=data.get("team_lead", ""),
+                    context=data.get("context", ""),
                 )
             )
         except (json.JSONDecodeError, KeyError, OSError):
@@ -53,6 +54,7 @@ def save_team(team: Team) -> None:
         "default_task_type": team.default_task_type,
         "rules": team.rules,
         "team_lead": team.team_lead,
+        "context": team.context,
     }
     with open(path, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
