@@ -1,9 +1,12 @@
 import uuid
 from datetime import datetime
+from pathlib import Path
 
 import flet as ft
 
 from core.ai_router import generate
+from core.audio_recorder import AudioRecorder
+from core.voice_processor import process_voice
 from data.drafts_store import save_draft
 from data.models import AIResponse, Draft, Team
 from data.settings_store import load_settings
@@ -26,6 +29,10 @@ class MainScreen:
         self._current_ai_response: AIResponse | None = None
         self._last_submitted_answers: list[list[str]] = []
 
+        # Voice input state
+        self._voice_stage: str = "idle"  # "idle" | "recording" | "processing_audio"
+        self._recorder: AudioRecorder | None = None
+
         # Mutable UI refs (set in build / _build_content)
         self._container: ft.Container | None = None
         self._team_dropdown: ft.Dropdown | None = None
@@ -38,6 +45,9 @@ class MainScreen:
         self._error_text: ft.Text | None = None
         self._generate_row: ft.Row | None = None
         self._result_area: ft.Column | None = None
+        self._mic_btn: ft.OutlinedButton | None = None
+        self._recording_row: ft.Row | None = None
+        self._processing_audio_row: ft.Row | None = None
 
     # ------------------------------------------------------------------
     # Public API
@@ -47,6 +57,8 @@ class MainScreen:
         self._teams = load_all_teams()
         self._selected_team = None
         self._stage = "input"
+        self._voice_stage = "idle"
+        self._recorder = None
         self._current_questions = []
         self._current_questions_form = None
         self._current_ai_response = None
@@ -62,6 +74,8 @@ class MainScreen:
         self._teams = load_all_teams()
         self._selected_team = None
         self._stage = "input"
+        self._voice_stage = "idle"
+        self._recorder = None
         self._current_questions = []
         self._current_questions_form = None
         self._current_ai_response = None
@@ -166,6 +180,44 @@ class MainScreen:
 
         self._result_area = ft.Column(controls=[], spacing=16)
 
+        self._mic_btn = ft.OutlinedButton(
+            "Голосовой ввод",
+            icon=ft.Icons.MIC,
+            on_click=self._on_mic_clicked,
+        )
+
+        self._recording_row = ft.Row(
+            controls=[
+                ft.Icon(ft.Icons.CIRCLE, color=ft.Colors.RED_500, size=14),
+                ft.Text("Запись...", color=ft.Colors.RED_500, weight=ft.FontWeight.W_500),
+                ft.Container(expand=True),
+                ft.OutlinedButton(
+                    "Отмена",
+                    icon=ft.Icons.CLOSE,
+                    on_click=self._on_voice_cancel,
+                    style=ft.ButtonStyle(color=ft.Colors.RED_400),
+                ),
+                ft.ElevatedButton(
+                    "Остановить и создать задачу",
+                    icon=ft.Icons.STOP_CIRCLE_OUTLINED,
+                    on_click=self._on_voice_generate,
+                ),
+            ],
+            vertical_alignment=ft.CrossAxisAlignment.CENTER,
+            spacing=8,
+            visible=False,
+        )
+
+        self._processing_audio_row = ft.Row(
+            controls=[
+                ft.ProgressRing(width=20, height=20, stroke_width=2),
+                ft.Text("Обрабатываю запись..."),
+            ],
+            vertical_alignment=ft.CrossAxisAlignment.CENTER,
+            spacing=12,
+            visible=False,
+        )
+
         return ft.Column(
             controls=[
                 ft.Text("Создать задачу", size=24, weight=ft.FontWeight.BOLD),
@@ -182,6 +234,9 @@ class MainScreen:
                     spacing=8,
                 ),
                 self._user_input,
+                self._mic_btn,
+                self._recording_row,
+                self._processing_audio_row,
                 self._make_generate_row(),
                 self._result_area,
             ],
@@ -368,6 +423,8 @@ class MainScreen:
         if self._save_draft_btn is not None:
             self._save_draft_btn.content = "Сохранить"
             self._save_draft_btn.icon = ft.Icons.BOOKMARK_BORDER
+        if self._mic_btn is not None:
+            self._mic_btn.visible = False
 
     def _set_clarification_view(self) -> None:
         """Switch to clarification stage: make inputs read-only, show Back button."""
@@ -388,6 +445,8 @@ class MainScreen:
         if self._save_draft_btn is not None:
             self._save_draft_btn.content = "Сохранить черновик"
             self._save_draft_btn.icon = ft.Icons.BOOKMARK_BORDER
+        if self._mic_btn is not None:
+            self._mic_btn.visible = False
 
     def _set_input_view(self) -> None:
         """Switch back to input stage: restore editable fields and Generate button."""
@@ -408,6 +467,8 @@ class MainScreen:
         if self._save_draft_btn is not None:
             self._save_draft_btn.content = "Сохранить черновик"
             self._save_draft_btn.icon = ft.Icons.BOOKMARK_BORDER
+        if self._mic_btn is not None:
+            self._mic_btn.visible = (self._voice_stage == "idle")
 
     def _on_back_clicked(self, e: ft.ControlEvent) -> None:
         """Back from clarification → input; back from ready → clarification or input."""
@@ -484,5 +545,96 @@ class MainScreen:
                 self._result_area.controls = [
                     ResultCard(self.page, self._current_ai_response).build()
                 ]
+
+        self.page.update()
+
+    # ------------------------------------------------------------------
+    # Voice input
+    # ------------------------------------------------------------------
+
+    def _on_mic_clicked(self, e: ft.ControlEvent) -> None:
+        settings = load_settings()
+        if not settings.gemini_api_key:
+            self._show_error(
+                "Для голосового ввода необходим ключ Google Gemini. Добавьте его в Настройках."
+            )
+            return
+        self._clear_error()
+        self._recorder = AudioRecorder()
+        self._recorder.start()
+        self._set_voice_stage("recording")
+
+    def _on_voice_cancel(self, e: ft.ControlEvent) -> None:
+        if self._recorder is not None:
+            self._recorder.cancel()
+            self._recorder = None
+        self._set_voice_stage("idle")
+
+    def _on_voice_generate(self, e: ft.ControlEvent) -> None:
+        if self._recorder is None:
+            return
+        audio_path = self._recorder.stop()
+        self._recorder = None
+        self._set_voice_stage("processing_audio")
+        self.page.run_task(self._process_voice_audio, audio_path)
+
+    async def _process_voice_audio(self, audio_path: Path) -> None:
+        try:
+            settings = load_settings()
+            teams = load_all_teams()
+            result = await process_voice(audio_path, teams, settings.gemini_api_key)
+        except Exception as exc:
+            self._set_voice_stage("idle")
+            self._show_error(f"Ошибка обработки записи: {exc}")
+            return
+        finally:
+            audio_path.unlink(missing_ok=True)
+
+        # Populate description field
+        if self._user_input is not None:
+            self._user_input.value = result.description
+        self._user_input_value = result.description
+
+        if result.team_name:
+            matched = next((t for t in teams if t.name == result.team_name), None)
+            if matched:
+                self._selected_team = matched
+                if self._team_dropdown is not None:
+                    self._team_dropdown.value = matched.name
+                self._set_voice_stage("idle")
+                self.page.update()
+                # Auto-trigger generation
+                await self._run_generation(result.description, None)
+                return
+
+        # Team not identified
+        self._set_voice_stage("idle")
+        self._show_error("Не удалось определить команду. Выберите её вручную.")
+
+    def _set_voice_stage(self, stage: str) -> None:
+        self._voice_stage = stage
+        is_active = stage != "idle"
+
+        if self._mic_btn is not None:
+            # Mic button visible only in idle and only on input stage
+            self._mic_btn.visible = not is_active and self._stage == "input"
+        if self._recording_row is not None:
+            self._recording_row.visible = stage == "recording"
+        if self._processing_audio_row is not None:
+            self._processing_audio_row.visible = stage == "processing_audio"
+
+        # Lock/unlock all interactive controls
+        if self._team_dropdown is not None:
+            self._team_dropdown.disabled = is_active
+        if self._user_input is not None:
+            self._user_input.disabled = is_active
+        if self._generate_btn is not None:
+            self._generate_btn.disabled = is_active
+        if self._back_btn is not None:
+            self._back_btn.disabled = is_active
+        if self._forward_btn is not None:
+            self._forward_btn.disabled = is_active
+        if self._save_draft_btn is not None:
+            self._save_draft_btn.disabled = is_active
 
         self.page.update()

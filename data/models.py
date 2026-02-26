@@ -28,6 +28,12 @@ class AIResponse:
 
 
 @dataclass
+class VoiceResult:
+    description: str
+    team_name: str | None = None  # None = не удалось определить команду из записи
+
+
+@dataclass
 class Draft:
     id: str
     created_at: str                       # ISO format datetime

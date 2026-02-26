@@ -4,7 +4,7 @@ from typing import Callable
 import flet as ft
 
 from data.models import Team
-from data.teams_store import delete_team, save_team
+from data.teams_store import delete_team, is_lead_taken, is_name_taken, save_team
 
 _DIALOG_W = 560
 _DIALOG_CONTENT_H = 520  # fixed height; content scrolls inside
@@ -294,18 +294,28 @@ class TeamEditor:
 
         def save_clicked(e: ft.ControlEvent) -> None:
             new_name = (name_field.value or "").strip()
+            new_lead = (team_lead_field.value or "").strip()
             new_project = (project_field.value or "").strip()
+            original_name = self.team.name if self.team else ""
 
             if not new_name:
                 error_text.value = "Введите название команды"
                 error_text.update()
                 return
-            if not (team_lead_field.value or "").strip():
+            if not new_lead:
                 error_text.value = "Введите руководителя команды"
                 error_text.update()
                 return
             if not new_project:
                 error_text.value = "Введите ключ проекта Jira"
+                error_text.update()
+                return
+            if is_name_taken(new_name, exclude_name=original_name):
+                error_text.value = "Команда с таким названием уже существует"
+                error_text.update()
+                return
+            if is_lead_taken(new_lead, exclude_name=original_name):
+                error_text.value = "Этот руководитель уже назначен на другую команду"
                 error_text.update()
                 return
 
@@ -317,7 +327,7 @@ class TeamEditor:
                 jira_project=new_project.upper(),
                 default_task_type=task_type_dropdown.value or "Story",
                 rules=_get_current_rules(),
-                team_lead=team_lead_field.value or "",
+                team_lead=new_lead,
                 context=context_field.value or "",
             )
             save_team(new_team)

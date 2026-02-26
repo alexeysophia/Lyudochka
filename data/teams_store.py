@@ -60,6 +60,26 @@ def save_team(team: Team) -> None:
         json.dump(data, f, ensure_ascii=False, indent=2)
 
 
+def is_name_taken(name: str, exclude_name: str = "") -> bool:
+    """Return True if another team already uses this name (case-insensitive)."""
+    needle = name.strip().lower()
+    exclude = exclude_name.strip().lower()
+    return any(
+        t.name.strip().lower() == needle and t.name.strip().lower() != exclude
+        for t in load_all_teams()
+    )
+
+
+def is_lead_taken(team_lead: str, exclude_name: str = "") -> bool:
+    """Return True if another team already has this team lead (case-insensitive)."""
+    needle = team_lead.strip().lower()
+    exclude = exclude_name.strip().lower()
+    return any(
+        t.team_lead.strip().lower() == needle and t.name.strip().lower() != exclude
+        for t in load_all_teams()
+    )
+
+
 def delete_team(team_name: str) -> None:
     teams_dir = _teams_dir()
     filename = _safe_filename(team_name) + ".json"
