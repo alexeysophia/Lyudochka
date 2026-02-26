@@ -159,6 +159,7 @@ class MainScreen:
             "Сгенерировать",
             icon=ft.Icons.AUTO_AWESOME,
             on_click=self._on_generate_clicked,
+            expand=True,
         )
 
         self._back_btn = ft.TextButton(
@@ -187,6 +188,7 @@ class MainScreen:
             "Голосовой ввод",
             icon=ft.Icons.MIC,
             on_click=self._on_mic_clicked,
+            expand=True,
         )
 
         self._recording_row = ft.Row(
@@ -237,7 +239,6 @@ class MainScreen:
                     spacing=8,
                 ),
                 self._user_input,
-                self._mic_btn,
                 self._recording_row,
                 self._processing_audio_row,
                 self._make_generate_row(),
@@ -403,6 +404,7 @@ class MainScreen:
         self._generate_row = ft.Row(
             controls=[
                 self._generate_btn,
+                self._mic_btn,
                 self._loading,
                 self._error_text,
             ],
@@ -428,8 +430,6 @@ class MainScreen:
         if self._save_draft_btn is not None:
             self._save_draft_btn.content = "Сохранить"
             self._save_draft_btn.icon = ft.Icons.BOOKMARK_BORDER
-        if self._mic_btn is not None:
-            self._mic_btn.visible = False
 
     def _set_clarification_view(self) -> None:
         """Switch to clarification stage: make inputs read-only, show Back button."""
@@ -450,8 +450,6 @@ class MainScreen:
         if self._save_draft_btn is not None:
             self._save_draft_btn.content = "Сохранить черновик"
             self._save_draft_btn.icon = ft.Icons.BOOKMARK_BORDER
-        if self._mic_btn is not None:
-            self._mic_btn.visible = False
 
     def _set_input_view(self) -> None:
         """Switch back to input stage: restore editable fields and Generate button."""
@@ -472,8 +470,6 @@ class MainScreen:
         if self._save_draft_btn is not None:
             self._save_draft_btn.content = "Сохранить черновик"
             self._save_draft_btn.icon = ft.Icons.BOOKMARK_BORDER
-        if self._mic_btn is not None:
-            self._mic_btn.visible = (self._voice_stage == "idle")
 
     def _on_back_clicked(self, e: ft.ControlEvent) -> None:
         """Back from clarification → input; back from ready → clarification or input."""
@@ -621,21 +617,23 @@ class MainScreen:
         self._voice_stage = stage
         is_active = stage != "idle"
 
-        if self._mic_btn is not None:
-            # Mic button visible only in idle and only on input stage
-            self._mic_btn.visible = not is_active and self._stage == "input"
         if self._recording_row is not None:
             self._recording_row.visible = stage == "recording"
         if self._processing_audio_row is not None:
             self._processing_audio_row.visible = stage == "processing_audio"
+        # Hide the whole buttons row when recording/processing;
+        # restore only if the workflow is still on the input stage.
+        if self._generate_row is not None:
+            if is_active:
+                self._generate_row.visible = False
+            elif self._stage == "input":
+                self._generate_row.visible = True
 
         # Lock/unlock all interactive controls
         if self._team_dropdown is not None:
             self._team_dropdown.disabled = is_active
         if self._user_input is not None:
             self._user_input.disabled = is_active
-        if self._generate_btn is not None:
-            self._generate_btn.disabled = is_active
         if self._back_btn is not None:
             self._back_btn.disabled = is_active
         if self._forward_btn is not None:
