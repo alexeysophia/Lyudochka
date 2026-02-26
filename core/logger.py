@@ -26,8 +26,13 @@ def setup_logging() -> None:
         datefmt="%Y-%m-%d %H:%M:%S",
     ))
 
+    # Root logger: WARNING — подавляет шум от Flet и других библиотек
     root = logging.getLogger()
-    root.setLevel(logging.DEBUG)
+    root.setLevel(logging.WARNING)
     root.addHandler(file_handler)
 
-    logging.info("=== Lyudochka started ===  log: %s", log_path)
+    # Наши модули пишут всё начиная с DEBUG
+    for name in ("core", "ui", "data", "__main__"):
+        logging.getLogger(name).setLevel(logging.DEBUG)
+
+    logging.getLogger(__name__).info("=== Lyudochka started ===  log: %s", log_path)
