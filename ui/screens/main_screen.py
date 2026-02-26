@@ -1,8 +1,11 @@
+import logging
 import uuid
 from datetime import datetime
 from pathlib import Path
 
 import flet as ft
+
+log = logging.getLogger(__name__)
 
 from core.ai_router import generate
 from core.audio_recorder import AudioRecorder
@@ -328,6 +331,7 @@ class MainScreen:
             )
             self._handle_response(response, user_input)
         except Exception as exc:
+            log.exception("Task generation failed")
             self._show_error(str(exc))
         finally:
             self._set_loading(False)
@@ -382,6 +386,7 @@ class MainScreen:
         self.page.update()
 
     def _show_error(self, message: str) -> None:
+        log.error("UI error: %s", message)
         if self._error_text is not None:
             self._error_text.value = message
         self.page.update()
@@ -584,6 +589,7 @@ class MainScreen:
             teams = load_all_teams()
             result = await process_voice(audio_path, teams, settings.gemini_api_key)
         except Exception as exc:
+            log.exception("Voice processing failed")
             self._set_voice_stage("idle")
             self._show_error(f"Ошибка обработки записи: {exc}")
             return

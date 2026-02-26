@@ -1,8 +1,12 @@
+import logging
 import os
 
 import flet as ft
 
+from core.logger import setup_logging
 from ui.app import AppShell
+
+log = logging.getLogger(__name__)
 
 _BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -21,6 +25,7 @@ def _build_icon_ico() -> str:
                 sizes=[(16, 16), (32, 32), (48, 48), (128, 128)],
             )
         except Exception:
+            log.exception("Failed to build app.ico from icon128.png")
             return png_path
     return ico_path if os.path.exists(ico_path) else png_path
 
@@ -39,4 +44,5 @@ def main(page: ft.Page) -> None:
 
 
 if __name__ == "__main__":
+    setup_logging()
     ft.run(main)
