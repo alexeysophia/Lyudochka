@@ -6,7 +6,7 @@ async def call_gemini(
     system_prompt: str,
     user_message: str,
     api_key: str,
-    model: str = "gemini-2.0-flash",
+    model: str = "gemini-2.5-flash",
 ) -> str:
     """Call Google Gemini API asynchronously and return the raw response text."""
     client = genai.Client(api_key=api_key)
