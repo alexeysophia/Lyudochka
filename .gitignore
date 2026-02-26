@@ -7,3 +7,5 @@ dist/
 build/
 *.spec
 *.exe
+.claude/
+=0.4
