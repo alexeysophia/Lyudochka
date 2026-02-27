@@ -1,6 +1,13 @@
+import logging
 import subprocess
 
 import flet as ft
+
+from core.jira_client import create_jira_issue
+from data.models import AIResponse
+from data.settings_store import load_settings
+
+log = logging.getLogger(__name__)
 
 
 def _copy_to_clipboard(text: str) -> None:
@@ -10,8 +17,6 @@ def _copy_to_clipboard(text: str) -> None:
         creationflags=subprocess.CREATE_NO_WINDOW,
     )
     proc.communicate(input=text.encode("utf-16"))
-
-from data.models import AIResponse
 
 
 class ResultCard:
@@ -24,6 +29,8 @@ class ResultCard:
         self._text_container: ft.Container | None = None
         self._edit_field: ft.TextField | None = None
         self._edit_btn: ft.IconButton | None = None
+        self._jira_btn: ft.ElevatedButton | None = None
+        self._jira_action_row: ft.Row | None = None
 
     # ------------------------------------------------------------------
     # Formatting helpers
@@ -204,6 +211,21 @@ class ResultCard:
                 ft.Row(controls=jira_chips, wrap=True),
             ]
 
+        settings = load_settings()
+        jira_configured = bool(settings.jira_url and settings.jira_token)
+        self._jira_btn = ft.ElevatedButton(
+            "Создать в Jira",
+            icon=ft.Icons.ADD_TASK,
+            disabled=not jira_configured,
+            tooltip=None if jira_configured else "Настройте Jira в разделе Настройки",
+            on_click=lambda e: self.page.run_task(self._create_in_jira),
+        )
+        self._jira_action_row = ft.Row(controls=[self._jira_btn])
+        controls += [
+            ft.Divider(),
+            self._jira_action_row,
+        ]
+
         return ft.Container(
             padding=16,
             border=ft.border.all(1, ft.Colors.OUTLINE_VARIANT),
@@ -257,3 +279,51 @@ class ResultCard:
             self._text_container.content = self._build_text_content()
             self._text_container.update()
         self._edit_btn.update()
+
+    async def _create_in_jira(self) -> None:
+        if self._jira_btn is None or self._jira_action_row is None:
+            return
+
+        self._jira_btn.disabled = True
+        self._jira_btn.content = "Создаю задачу..."
+        self._jira_btn.update()
+
+        settings = load_settings()
+        jira_params = self.response.jira_params
+        try:
+            key = await create_jira_issue(
+                jira_url=settings.jira_url,
+                token=settings.jira_token,
+                project_key=jira_params.get("project", ""),
+                summary=self.response.task_title,
+                description=self._task_text,
+                issue_type=jira_params.get("type", "Story"),
+                priority=jira_params.get("priority"),
+                labels=jira_params.get("labels", []),
+            )
+        except Exception as exc:
+            log.exception("Jira issue creation failed")
+            self._jira_btn.disabled = False
+            self._jira_btn.content = "Создать в Jira"
+            self._jira_btn.update()
+            snack = ft.SnackBar(
+                content=ft.Text(f"Ошибка Jira: {exc}"), open=True
+            )
+            self.page.overlay.append(snack)
+            self.page.update()
+            return
+
+        issue_url = f"{settings.jira_url.rstrip('/')}/browse/{key}"
+        open_btn = ft.TextButton(
+            f"Открыть {key} в Jira",
+            icon=ft.Icons.OPEN_IN_NEW,
+            url=issue_url,
+        )
+        self._jira_action_row.controls = [open_btn]
+        self._jira_action_row.update()
+
+        snack = ft.SnackBar(
+            content=ft.Text(f"Задача {key} создана в Jira"), open=True
+        )
+        self.page.overlay.append(snack)
+        self.page.update()

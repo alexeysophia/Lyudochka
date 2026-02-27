@@ -31,6 +31,8 @@ def load_settings() -> Settings:
             default_llm=data.get("default_llm", "anthropic"),
             anthropic_api_key=data.get("anthropic_api_key", ""),
             gemini_api_key=data.get("gemini_api_key", ""),
+            jira_url=data.get("jira_url", ""),
+            jira_token=data.get("jira_token", ""),
         )
     except (json.JSONDecodeError, OSError):
         return Settings()
@@ -42,6 +44,8 @@ def save_settings(settings: Settings) -> None:
         "default_llm": settings.default_llm,
         "anthropic_api_key": settings.anthropic_api_key,
         "gemini_api_key": settings.gemini_api_key,
+        "jira_url": settings.jira_url,
+        "jira_token": settings.jira_token,
     }
     with open(path, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)

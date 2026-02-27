@@ -37,6 +37,21 @@ class SettingsScreen:
             width=520,
         )
 
+        jira_url_field = ft.TextField(
+            label="URL Jira Server",
+            hint_text="https://jira.company.com",
+            value=settings.jira_url,
+            width=520,
+        )
+
+        jira_token_field = ft.TextField(
+            label="Персональный токен",
+            value=settings.jira_token,
+            password=True,
+            can_reveal_password=True,
+            width=520,
+        )
+
         status_text = ft.Text("", color=ft.Colors.GREEN)
 
         def save_clicked(e: ft.ControlEvent) -> None:
@@ -44,6 +59,8 @@ class SettingsScreen:
                 default_llm=llm_dropdown.value or "anthropic",
                 anthropic_api_key=anthropic_key.value or "",
                 gemini_api_key=gemini_key.value or "",
+                jira_url=jira_url_field.value or "",
+                jira_token=jira_token_field.value or "",
             )
             save_settings(new_settings)
             status_text.value = "✓ Настройки сохранены"
@@ -68,6 +85,10 @@ class SettingsScreen:
                     ft.Text("API-ключи", size=15, weight=ft.FontWeight.W_500),
                     anthropic_key,
                     gemini_key,
+                    ft.Container(height=8),
+                    ft.Text("Подключение к Jira", size=15, weight=ft.FontWeight.W_500),
+                    jira_url_field,
+                    jira_token_field,
                     ft.Container(height=8),
                     save_btn,
                     status_text,

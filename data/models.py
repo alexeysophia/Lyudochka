@@ -16,6 +16,8 @@ class Settings:
     default_llm: str = "anthropic"   # "anthropic" | "gemini"
     anthropic_api_key: str = ""
     gemini_api_key: str = ""
+    jira_url: str = ""               # e.g. "https://jira.company.com"
+    jira_token: str = ""             # Personal Access Token
 
 
 @dataclass
