@@ -87,9 +87,17 @@ class DraftsScreen:
         )
 
     def _build_draft_card(self, draft: Draft) -> ft.Control:
-        stage_label, stage_color = _STAGE_LABELS.get(
-            draft.stage, ("Неизвестно", ft.Colors.GREY_600)
+        jira_key = (
+            draft.ai_response.jira_issue_key
+            if draft.ai_response and draft.ai_response.jira_issue_key
+            else ""
         )
+        if jira_key:
+            stage_label, stage_color = "В Jira", ft.Colors.TEAL_700
+        else:
+            stage_label, stage_color = _STAGE_LABELS.get(
+                draft.stage, ("Неизвестно", ft.Colors.GREY_600)
+            )
 
         try:
             dt = datetime.fromisoformat(draft.created_at)
@@ -132,6 +140,10 @@ class DraftsScreen:
                                     horizontal=8, vertical=3
                                 ),
                                 border_radius=10,
+                            ),
+                            *(
+                                [ft.Text(jira_key, size=12, color=ft.Colors.TEAL_700, weight=ft.FontWeight.W_500)]
+                                if jira_key else []
                             ),
                             ft.Text(
                                 date_str, size=12, color=ft.Colors.GREY_500
