@@ -21,6 +21,7 @@ def save_draft(draft: Draft) -> None:
             "task_title": draft.ai_response.task_title,
             "jira_params": draft.ai_response.jira_params,
             "questions": draft.ai_response.questions,
+            "jira_issue_key": draft.ai_response.jira_issue_key,
         }
     data = {
         "id": draft.id,
@@ -53,6 +54,7 @@ def load_all_drafts() -> list[Draft]:
                     task_title=ar.get("task_title", ""),
                     jira_params=ar.get("jira_params", {}),
                     questions=ar.get("questions", []),
+                    jira_issue_key=ar.get("jira_issue_key", ""),
                 )
             result.append(
                 Draft(

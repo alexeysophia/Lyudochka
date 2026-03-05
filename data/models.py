@@ -25,8 +25,9 @@ class AIResponse:
     status: str                           # "ready" | "need_clarification"
     task_text: str = ""                   # Formatted task body (if ready)
     task_title: str = ""                  # Task title (if ready)
-    jira_params: dict = field(default_factory=dict)   # project, type, priority, labels (if ready)
+    jira_params: dict = field(default_factory=dict)   # project, type, labels (if ready)
     questions: list[str] = field(default_factory=list)  # Clarifying questions (if need_clarification)
+    jira_issue_key: str = ""  # e.g. "VKPCP-123", filled after successful Jira creation
 
 
 @dataclass

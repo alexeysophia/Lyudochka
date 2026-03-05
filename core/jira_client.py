@@ -12,7 +12,6 @@ async def create_jira_issue(
     summary: str,
     description: str,
     issue_type: str = "Story",
-    priority: str | None = None,
     labels: list[str] | None = None,
 ) -> str:
     """Create a Jira issue via REST API v2. Returns the issue key (e.g. 'PROJ-123')."""
@@ -24,8 +23,8 @@ async def create_jira_issue(
         "description": description,
         "issuetype": {"name": issue_type},
     }
-    if priority:
-        fields["priority"] = {"name": priority}
+    if issue_type.lower() == "epic":
+        fields["customfield_15501"] = summary  # Epic Name — обязательное поле для Epic
     if labels:
         fields["labels"] = labels
 
@@ -36,10 +35,16 @@ async def create_jira_issue(
         "Accept": "application/json",
     }
 
+    log.debug("Jira request payload: %s", payload)
     async with httpx.AsyncClient(verify=False, timeout=30.0) as client:
         response = await client.post(url, json=payload, headers=headers)
-        response.raise_for_status()
-        data = response.json()
+
+    log.debug("Jira response status: %s", response.status_code)
+    if response.status_code >= 400:
+        raw = response.text
+        log.error("Jira API error %s: %s", response.status_code, raw)
+        raise ValueError(f"Jira {response.status_code}: {raw}")
+    data = response.json()
 
     key: str = data["key"]
     log.info("Jira issue created: %s", key)

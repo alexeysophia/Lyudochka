@@ -29,7 +29,6 @@ _SYSTEM_PROMPT_TEMPLATE = """\
   "jira_params": {{
     "project": "{jira_project}",
     "type": "Story/Bug/Task",
-    "priority": "High/Medium/Low",
     "labels": []
   }}
 }}

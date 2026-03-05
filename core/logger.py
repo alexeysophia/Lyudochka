@@ -1,12 +1,11 @@
 """Application-wide logging setup. Call setup_logging() once at startup."""
 import logging
 import os
-from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
 
 def setup_logging() -> None:
-    """Configure root logger: rotating file in %APPDATA%\\Lyudochka\\lyudochka.log."""
+    """Configure root logger: file in %APPDATA%\\Lyudochka\\lyudochka.log (cleared on each start)."""
     log_dir = (
         Path(os.environ["APPDATA"]) if "APPDATA" in os.environ
         else Path.home() / "AppData" / "Roaming"
@@ -14,12 +13,7 @@ def setup_logging() -> None:
     log_dir.mkdir(parents=True, exist_ok=True)
     log_path = log_dir / "lyudochka.log"
 
-    file_handler = RotatingFileHandler(
-        log_path,
-        maxBytes=5 * 1024 * 1024,  # 5 MB
-        backupCount=2,
-        encoding="utf-8",
-    )
+    file_handler = logging.FileHandler(log_path, mode="w", encoding="utf-8")
     file_handler.setLevel(logging.DEBUG)
     file_handler.setFormatter(logging.Formatter(
         fmt="%(asctime)s [%(levelname)-8s] %(name)s: %(message)s",

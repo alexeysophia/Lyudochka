@@ -200,8 +200,6 @@ class ResultCard:
             jira_chips.append(ft.Chip(label=ft.Text(f"Проект: {jira['project']}")))
         if jira.get("type"):
             jira_chips.append(ft.Chip(label=ft.Text(f"Тип: {jira['type']}")))
-        if jira.get("priority"):
-            jira_chips.append(ft.Chip(label=ft.Text(f"Приоритет: {jira['priority']}")))
         for lbl in jira.get("labels", []):
             jira_chips.append(ft.Chip(label=ft.Text(str(lbl))))
 
@@ -212,15 +210,26 @@ class ResultCard:
             ]
 
         settings = load_settings()
-        jira_configured = bool(settings.jira_url and settings.jira_token)
-        self._jira_btn = ft.ElevatedButton(
-            "Создать в Jira",
-            icon=ft.Icons.ADD_TASK,
-            disabled=not jira_configured,
-            tooltip=None if jira_configured else "Настройте Jira в разделе Настройки",
-            on_click=lambda e: self.page.run_task(self._create_in_jira),
-        )
-        self._jira_action_row = ft.Row(controls=[self._jira_btn])
+        self._jira_action_row = ft.Row(controls=[])
+        if self.response.jira_issue_key:
+            issue_url = f"{settings.jira_url.rstrip('/')}/browse/{self.response.jira_issue_key}"
+            self._jira_action_row.controls = [
+                ft.TextButton(
+                    f"Открыть {self.response.jira_issue_key} в Jira",
+                    icon=ft.Icons.OPEN_IN_NEW,
+                    url=issue_url,
+                )
+            ]
+        else:
+            jira_configured = bool(settings.jira_url and settings.jira_token)
+            self._jira_btn = ft.ElevatedButton(
+                "Создать в Jira",
+                icon=ft.Icons.ADD_TASK,
+                disabled=not jira_configured,
+                tooltip=None if jira_configured else "Настройте Jira в разделе Настройки",
+                on_click=lambda e: self.page.run_task(self._create_in_jira),
+            )
+            self._jira_action_row.controls = [self._jira_btn]
         controls += [
             ft.Divider(),
             self._jira_action_row,
@@ -298,7 +307,6 @@ class ResultCard:
                 summary=self.response.task_title,
                 description=self._task_text,
                 issue_type=jira_params.get("type", "Story"),
-                priority=jira_params.get("priority"),
                 labels=jira_params.get("labels", []),
             )
         except Exception as exc:
@@ -313,6 +321,7 @@ class ResultCard:
             self.page.update()
             return
 
+        self.response.jira_issue_key = key
         issue_url = f"{settings.jira_url.rstrip('/')}/browse/{key}"
         open_btn = ft.TextButton(
             f"Открыть {key} в Jira",
