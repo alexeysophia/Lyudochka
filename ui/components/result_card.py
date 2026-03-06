@@ -6,6 +6,7 @@ import flet as ft
 from core.jira_client import create_jira_issue
 from data.models import AIResponse
 from data.settings_store import load_settings
+from ui.snack import error_snack
 
 log = logging.getLogger(__name__)
 
@@ -381,13 +382,7 @@ class ResultCard:
             self._jira_btn.disabled = False
             self._jira_btn.content = "Создать в Jira"
             self._jira_btn.update()
-            snack = ft.SnackBar(
-                content=ft.Text(f"Ошибка Jira: {exc}", color=ft.Colors.WHITE),
-                bgcolor=ft.Colors.RED_700,
-                open=True,
-            )
-            self.page.overlay.append(snack)
-            self.page.update()
+            error_snack(self.page, f"Ошибка Jira: {exc}")
             return
 
         self.response.jira_issue_key = key

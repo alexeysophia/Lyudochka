@@ -83,10 +83,17 @@ async def get_project_meta(jira_url: str, token: str, project_key: str) -> dict:
         f"{base}/rest/api/2/issue/createmeta"
         f"?projectKeys={project_key}&expand=projects.issuetypes.fields"
     )
-    async with httpx.AsyncClient(verify=False, timeout=60.0) as client:
-        resp = await client.get(url, headers=headers)
-        if resp.status_code >= 400:
-            raise ValueError(f"Jira {resp.status_code}: {resp.text}")
+    try:
+        async with httpx.AsyncClient(verify=False, timeout=60.0) as client:
+            resp = await client.get(url, headers=headers)
+    except httpx.ConnectTimeout:
+        raise ValueError("Сервер Jira недоступен: превышено время подключения")
+    except httpx.TimeoutException:
+        raise ValueError("Сервер Jira не ответил вовремя (таймаут)")
+    except httpx.ConnectError as e:
+        raise ValueError(f"Не удалось подключиться к Jira: {e}")
+    if resp.status_code >= 400:
+        raise ValueError(f"Jira {resp.status_code}: {resp.text}")
         data = resp.json()
 
     projects = data.get("projects", [])
@@ -151,14 +158,30 @@ async def create_jira_issue(
     }
 
     log.debug("Jira request payload: %s", payload)
-    async with httpx.AsyncClient(verify=False, timeout=30.0) as client:
-        response = await client.post(url, json=payload, headers=headers)
+    try:
+        async with httpx.AsyncClient(verify=False, timeout=30.0) as client:
+            response = await client.post(url, json=payload, headers=headers)
+    except httpx.ConnectTimeout:
+        raise ValueError("Сервер Jira недоступен: превышено время подключения")
+    except httpx.TimeoutException:
+        raise ValueError("Сервер Jira не ответил вовремя (таймаут)")
+    except httpx.ConnectError as e:
+        raise ValueError(f"Не удалось подключиться к Jira: {e}")
 
     log.debug("Jira response status: %s", response.status_code)
     if response.status_code >= 400:
         raw = response.text
         log.error("Jira API error %s: %s", response.status_code, raw)
-        raise ValueError(f"Jira {response.status_code}: {raw}")
+        status = response.status_code
+        if status == 401:
+            raise ValueError("Jira: неверный токен (401 Unauthorized)")
+        elif status == 403:
+            raise ValueError("Jira: нет прав для создания задачи (403 Forbidden)")
+        elif status == 500:
+            raise ValueError("Jira: внутренняя ошибка сервера (500)")
+        elif status == 503:
+            raise ValueError("Jira: сервер временно недоступен (503)")
+        raise ValueError(f"Jira {status}: {raw}")
     data = response.json()
 
     key: str = data["key"]

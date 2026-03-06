@@ -2,6 +2,8 @@ from typing import Callable
 
 import flet as ft
 
+from ui.snack import error_snack
+
 
 class QuestionsForm:
     def __init__(
@@ -64,13 +66,7 @@ class QuestionsForm:
                 for i in range(len(self.questions))
             ]
             if not any(a.strip() for _, a in answers):
-                snack = ft.SnackBar(
-                    content=ft.Text("Нет данных для отправки", color=ft.Colors.WHITE),
-                    bgcolor=ft.Colors.RED_700,
-                    open=True,
-                )
-                self.page.overlay.append(snack)
-                self.page.update()
+                error_snack(self.page, "Нет данных для отправки")
                 return
             if self._submit_btn is not None:
                 self._submit_btn.disabled = True

@@ -17,6 +17,7 @@ from data.settings_store import load_settings
 from data.teams_store import load_all_teams
 from ui.components.questions_form import QuestionsForm
 from ui.components.result_card import ResultCard
+from ui.snack import error_snack
 
 
 _BTN_W = 210  # unified width for action buttons (Generate, Mic, Save Draft, etc.)
@@ -106,6 +107,8 @@ class MainScreen:
             self._team_dropdown.value = draft.team_name
         if self._user_input is not None:
             self._user_input.value = draft.user_input
+        if self._save_draft_btn is not None:
+            self._save_draft_btn.disabled = not bool((draft.user_input or "").strip())
 
         if draft.stage == "clarification" and draft.questions:
             self._set_clarification_view()
@@ -148,6 +151,12 @@ class MainScreen:
             on_select=self._on_team_change,
         )
 
+        def _on_input_change(e: ft.ControlEvent) -> None:
+            if self._save_draft_btn is not None:
+                has_text = bool((self._user_input.value or "").strip())
+                self._save_draft_btn.disabled = not has_text
+                self._save_draft_btn.update()
+
         self._user_input = ft.TextField(
             label="Описание задачи",
             multiline=True,
@@ -155,6 +164,8 @@ class MainScreen:
             max_lines=12,
             hint_text="Опишите задачу своими словами — что нужно сделать и зачем...",
             expand=True,
+            align_label_with_hint=True,
+            on_change=_on_input_change,
         )
 
         self._loading = ft.ProgressRing(visible=False, width=24, height=24)
@@ -187,11 +198,11 @@ class MainScreen:
             visible=False,
         )
 
-        self._save_draft_btn = ft.OutlinedButton(
+        self._save_draft_btn = ft.TextButton(
             "Сохранить",
             icon=ft.Icons.BOOKMARK_BORDER,
             on_click=self._save_draft_clicked,
-            width=_BTN_W,
+            disabled=True,
         )
 
         self._result_area = ft.Column(controls=[], spacing=16)
@@ -237,11 +248,9 @@ class MainScreen:
 
         return ft.Column(
             controls=[
-                ft.Text("Создать задачу", size=24, weight=ft.FontWeight.BOLD),
-                ft.Divider(),
                 ft.Row(
                     controls=[
-                        self._team_dropdown,
+                        ft.Text("Создать задачу", size=24, weight=ft.FontWeight.BOLD),
                         ft.Container(expand=True),
                         self._back_btn,
                         self._forward_btn,
@@ -251,6 +260,8 @@ class MainScreen:
                     vertical_alignment=ft.CrossAxisAlignment.CENTER,
                     spacing=8,
                 ),
+                ft.Divider(),
+                self._team_dropdown,
                 self._user_input,
                 self._recording_row,
                 self._processing_audio_row,
@@ -445,13 +456,7 @@ class MainScreen:
 
     def _show_error(self, message: str) -> None:
         log.error("UI error: %s", message)
-        snack = ft.SnackBar(
-            content=ft.Text(message, color=ft.Colors.WHITE),
-            bgcolor=ft.Colors.RED_700,
-            open=True,
-        )
-        self.page.overlay.append(snack)
-        self.page.update()
+        error_snack(self.page, message)
 
     def _clear_error(self) -> None:
         pass  # SnackBars dismiss automatically
@@ -515,10 +520,11 @@ class MainScreen:
             self._generate_row.visible = False
         if self._back_btn is not None:
             self._back_btn.visible = True
+        has_result = self._current_ai_response is not None
         if self._forward_btn is not None:
-            self._forward_btn.visible = self._current_ai_response is not None
+            self._forward_btn.visible = has_result
         if self._skip_btn is not None:
-            self._skip_btn.visible = True
+            self._skip_btn.visible = not has_result
         if self._save_draft_btn is not None:
             self._save_draft_btn.content = "Сохранить"
             self._save_draft_btn.icon = ft.Icons.BOOKMARK_BORDER

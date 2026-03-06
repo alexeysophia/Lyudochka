@@ -68,6 +68,7 @@ class AppShell:
                 self._content_area,
             ],
             expand=True,
+            vertical_alignment=ft.CrossAxisAlignment.START,
         )
 
     def _on_nav_change(self, e: ft.ControlEvent) -> None:
