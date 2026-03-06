@@ -67,38 +67,19 @@ class TeamEditor:
         fetch_loading = ft.ProgressRing(visible=False, width=16, height=16, stroke_width=2)
         fetch_status = ft.Text("", size=11, color=ft.Colors.GREY_600, expand=True)
 
-        # --- Task type ---
-        _PRESET_TYPES = {"Story", "Bug", "Task", "Epic", "Sub-task"}
-        _current_type = self.team.default_task_type if self.team else "Epic"
-        _is_custom = _current_type not in _PRESET_TYPES
-
+        # --- Task type (only types fetched from Jira are allowed) ---
+        _current_type = self.team.default_task_type if self.team else ""
+        # Pre-populate with saved type so user can re-save without re-fetching
+        _initial_opts = (
+            [ft.dropdown.Option(_current_type)] if _current_type else []
+        )
         task_type_dropdown = ft.Dropdown(
             label="Тип задачи",
-            value="Custom" if _is_custom else _current_type,
+            value=_current_type or None,
+            hint_text="Получите типы из Jira ↑",
             expand=True,
-            options=[
-                ft.dropdown.Option("Story"),
-                ft.dropdown.Option("Bug"),
-                ft.dropdown.Option("Task"),
-                ft.dropdown.Option("Epic"),
-                ft.dropdown.Option("Sub-task"),
-                ft.dropdown.Option("Custom", "Свой тип..."),
-            ],
+            options=_initial_opts,
         )
-        custom_type_field = ft.TextField(
-            label="Свой тип задачи",
-            value=_current_type if _is_custom else "",
-            hint_text="например: Задача",
-            expand=True,
-            visible=_is_custom,
-            content_padding=_field_padding,
-        )
-
-        def on_task_type_change(e: ft.ControlEvent) -> None:
-            custom_type_field.visible = (task_type_dropdown.value == "Custom")
-            custom_type_field.update()
-
-        task_type_dropdown.on_select = on_task_type_change
 
         async def _do_fetch_meta() -> None:
             proj_key = (project_field.value or "").strip().upper()
@@ -142,15 +123,12 @@ class TeamEditor:
 
             # Update issue type dropdown
             current_val = task_type_dropdown.value
-            effective = (custom_type_field.value or "").strip() if current_val == "Custom" else current_val
             type_names = [t["name"] for t in _jira_issue_types]
-            new_opts = [ft.dropdown.Option(t["name"]) for t in _jira_issue_types]
-            new_opts.append(ft.dropdown.Option("Custom", "Свой тип..."))
-            task_type_dropdown.options = new_opts
-            if effective in type_names:
-                task_type_dropdown.value = effective
-                custom_type_field.visible = False
-                custom_type_field.update()
+            task_type_dropdown.options = [ft.dropdown.Option(t["name"]) for t in _jira_issue_types]
+            if current_val in type_names:
+                task_type_dropdown.value = current_val
+            else:
+                task_type_dropdown.value = None
             task_type_dropdown.update()
 
             # Rebuild extra-fields add-row and existing rows
@@ -515,14 +493,11 @@ class TeamEditor:
             if is_edit and self.team and self.team.name != new_name:
                 delete_team(self.team.name)
 
-            if task_type_dropdown.value == "Custom":
-                chosen_type = (custom_type_field.value or "").strip()
-                if not chosen_type:
-                    error_text.value = "Введите свой тип задачи"
-                    error_text.update()
-                    return
-            else:
-                chosen_type = task_type_dropdown.value or "Story"
+            chosen_type = task_type_dropdown.value or ""
+            if not chosen_type:
+                error_text.value = "Выберите тип задачи (нажмите кнопку получения типов из Jira)"
+                error_text.update()
+                return
 
             new_team = Team(
                 name=new_name,
@@ -574,10 +549,7 @@ class TeamEditor:
                             controls=[fetch_status],
                             spacing=4,
                         ),
-                        ft.Row(
-                            controls=[task_type_dropdown, custom_type_field],
-                            spacing=12,
-                        ),
+                        task_type_dropdown,
                         ft.Row(
                             controls=[
                                 ft.Text(
