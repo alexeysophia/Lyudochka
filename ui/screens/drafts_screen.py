@@ -22,8 +22,12 @@ class DraftsScreen:
         self.page = page
         self._on_restore = on_restore
         self._container: ft.Container | None = None
+        self._all_drafts: list[Draft] = []
+        self._drafts_list_column: ft.Column | None = None
+        self._filter_value: str = "Все команды"
 
     def build(self) -> ft.Control:
+        self._filter_value = "Все команды"
         self._container = ft.Container(
             padding=30,
             content=self._build_content(),
@@ -32,17 +36,36 @@ class DraftsScreen:
         return self._container
 
     def _build_content(self) -> ft.Control:
-        drafts = load_all_drafts()
+        self._all_drafts = load_all_drafts()
+
+        team_names = sorted({d.team_name for d in self._all_drafts if d.team_name})
+        dropdown_options = [ft.dropdown.Option("Все команды")] + [
+            ft.dropdown.Option(name) for name in team_names
+        ]
+        filter_dropdown = ft.Dropdown(
+            options=dropdown_options,
+            value=self._filter_value,
+            width=200,
+            content_padding=ft.padding.symmetric(horizontal=10, vertical=6),
+            on_select=self._on_filter_change,
+        )
 
         header = ft.Column(
             controls=[
-                ft.Text("Сохраненные задачи", size=24, weight=ft.FontWeight.BOLD),
+                ft.Row(
+                    controls=[
+                        ft.Text("Сохраненные задачи", size=24, weight=ft.FontWeight.BOLD),
+                        ft.Container(expand=True),
+                        filter_dropdown,
+                    ],
+                    vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                ),
                 ft.Divider(),
             ],
             spacing=8,
         )
 
-        if not drafts:
+        if not self._all_drafts:
             return ft.Column(
                 controls=[
                     header,
@@ -70,21 +93,34 @@ class DraftsScreen:
                 expand=True,
             )
 
-        draft_cards = [self._build_draft_card(d) for d in drafts]
+        filtered = self._filtered_drafts()
+        self._drafts_list_column = ft.Column(
+            controls=[self._build_draft_card(d) for d in filtered],
+            spacing=12,
+            scroll=ft.ScrollMode.AUTO,
+            expand=True,
+        )
 
         return ft.Column(
             controls=[
                 header,
-                ft.Column(
-                    controls=draft_cards,
-                    spacing=12,
-                    scroll=ft.ScrollMode.AUTO,
-                    expand=True,
-                ),
+                self._drafts_list_column,
             ],
             spacing=0,
             expand=True,
         )
+
+    def _filtered_drafts(self) -> list[Draft]:
+        if self._filter_value == "Все команды":
+            return self._all_drafts
+        return [d for d in self._all_drafts if d.team_name == self._filter_value]
+
+    def _on_filter_change(self, e: ft.ControlEvent) -> None:
+        self._filter_value = e.control.value or "Все команды"
+        if self._drafts_list_column is not None:
+            filtered = self._filtered_drafts()
+            self._drafts_list_column.controls = [self._build_draft_card(d) for d in filtered]
+            self.page.update()
 
     def _build_draft_card(self, draft: Draft) -> ft.Control:
         jira_key = (
