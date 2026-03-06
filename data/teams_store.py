@@ -37,6 +37,8 @@ def load_all_teams() -> list[Team]:
                     rules=data["rules"],
                     team_lead=data.get("team_lead", ""),
                     context=data.get("context", ""),
+                    extra_jira_fields=data.get("extra_jira_fields", {}),
+                    default_task_type_id=data.get("default_task_type_id", ""),
                 )
             )
         except (json.JSONDecodeError, KeyError, OSError):
@@ -52,9 +54,11 @@ def save_team(team: Team) -> None:
         "name": team.name,
         "jira_project": team.jira_project,
         "default_task_type": team.default_task_type,
+        "default_task_type_id": team.default_task_type_id,
         "rules": team.rules,
         "team_lead": team.team_lead,
         "context": team.context,
+        "extra_jira_fields": team.extra_jira_fields,
     }
     with open(path, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)

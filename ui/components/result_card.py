@@ -24,6 +24,7 @@ class ResultCard:
         self.page = page
         self.response = response
         self._task_text = response.task_text
+        self._labels: list[str] = list(response.jira_params.get("labels", []))
         self._edit_mode = False
         self._saved_sel: list[int] = [0, 0]
         self._text_container: ft.Container | None = None
@@ -31,6 +32,8 @@ class ResultCard:
         self._edit_btn: ft.IconButton | None = None
         self._jira_btn: ft.ElevatedButton | None = None
         self._jira_action_row: ft.Row | None = None
+        self._tags_row: ft.Row | None = None
+        self._new_label_field: ft.TextField | None = None
 
     # ------------------------------------------------------------------
     # Formatting helpers
@@ -136,15 +139,20 @@ class ResultCard:
             on_click=self._toggle_edit,
         )
 
+        in_jira = bool(self.response.jira_issue_key)
+        header_icon = ft.Icons.TASK_ALT if in_jira else ft.Icons.CHECK_CIRCLE_OUTLINE
+        header_color = ft.Colors.TEAL_700 if in_jira else ft.Colors.GREEN
+        header_text = "Задача в Jira" if in_jira else "Задача готова"
+
         controls: list[ft.Control] = [
             ft.Row(
                 controls=[
-                    ft.Icon(ft.Icons.CHECK_CIRCLE_OUTLINE, color=ft.Colors.GREEN),
+                    ft.Icon(header_icon, color=header_color),
                     ft.Text(
-                        "Задача готова",
+                        header_text,
                         size=16,
                         weight=ft.FontWeight.BOLD,
-                        color=ft.Colors.GREEN,
+                        color=header_color,
                     ),
                     ft.Container(expand=True),
                     ft.IconButton(
@@ -181,15 +189,15 @@ class ResultCard:
                 border_radius=8,
                 content=self._build_text_content(),
             )
+            desc_row_controls: list[ft.Control] = [
+                ft.Text("Описание задачи", size=11, color=ft.Colors.GREY_600),
+                ft.Container(expand=True),
+            ]
+            if not in_jira:
+                desc_row_controls.append(self._edit_btn)
             controls += [
                 ft.Row(
-                    controls=[
-                        ft.Text(
-                            "Описание задачи", size=11, color=ft.Colors.GREY_600
-                        ),
-                        ft.Container(expand=True),
-                        self._edit_btn,
-                    ],
+                    controls=desc_row_controls,
                     vertical_alignment=ft.CrossAxisAlignment.CENTER,
                 ),
                 self._text_container,
@@ -200,14 +208,38 @@ class ResultCard:
             jira_chips.append(ft.Chip(label=ft.Text(f"Проект: {jira['project']}")))
         if jira.get("type"):
             jira_chips.append(ft.Chip(label=ft.Text(f"Тип: {jira['type']}")))
-        for lbl in jira.get("labels", []):
-            jira_chips.append(ft.Chip(label=ft.Text(str(lbl))))
+        for field_key, field_val in (jira.get("extra_fields") or {}).items():
+            jira_chips.append(ft.Chip(label=ft.Text(f"{field_key}: {field_val}")))
 
         if jira_chips:
             controls += [
                 ft.Text("Параметры Jira", size=11, color=ft.Colors.GREY_600),
                 ft.Row(controls=jira_chips, wrap=True),
             ]
+
+        self._new_label_field = ft.TextField(
+            hint_text="Новый тег",
+            dense=True,
+            width=180,
+            on_submit=self._add_label,
+        )
+        self._tags_row = self._build_tags_row()
+        controls += [
+            ft.Text("Теги", size=11, color=ft.Colors.GREY_600),
+            self._tags_row,
+            ft.Row(
+                controls=[
+                    self._new_label_field,
+                    ft.IconButton(
+                        icon=ft.Icons.ADD,
+                        tooltip="Добавить тег",
+                        on_click=self._add_label,
+                    ),
+                ],
+                vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                spacing=4,
+            ),
+        ]
 
         settings = load_settings()
         self._jira_action_row = ft.Row(controls=[])
@@ -272,6 +304,39 @@ class ResultCard:
                 expand=True,
             )
 
+    def _build_tags_row(self) -> ft.Row:
+        chips: list[ft.Control] = [
+            ft.Chip(
+                label=ft.Text(lbl),
+                on_delete=lambda e, l=lbl: self._remove_label(l),
+            )
+            for lbl in self._labels
+        ]
+        if not chips:
+            chips = [ft.Text("Нет тегов", size=12, color=ft.Colors.GREY_400, italic=True)]
+        if self._tags_row is None:
+            return ft.Row(controls=chips, wrap=True)
+        self._tags_row.controls = chips
+        self._tags_row.update()
+        return self._tags_row
+
+    def _remove_label(self, label: str) -> None:
+        if label in self._labels:
+            self._labels.remove(label)
+            self.response.jira_params["labels"] = self._labels
+            self._build_tags_row()
+
+    def _add_label(self, e: ft.ControlEvent) -> None:
+        if self._new_label_field is None:
+            return
+        value = (self._new_label_field.value or "").strip()
+        if value and value not in self._labels:
+            self._labels.append(value)
+            self.response.jira_params["labels"] = self._labels
+            self._new_label_field.value = ""
+            self._new_label_field.update()
+            self._build_tags_row()
+
     def _toggle_edit(self, e: ft.ControlEvent) -> None:
         if self._edit_mode:
             if self._edit_field is not None:
@@ -307,7 +372,9 @@ class ResultCard:
                 summary=self.response.task_title,
                 description=self._task_text,
                 issue_type=jira_params.get("type", "Story"),
+                issue_type_id=jira_params.get("type_id", ""),
                 labels=jira_params.get("labels", []),
+                extra_fields=jira_params.get("extra_fields"),
             )
         except Exception as exc:
             log.exception("Jira issue creation failed")

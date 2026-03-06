@@ -9,6 +9,8 @@ class Team:
     rules: str              # Free-form rules text shown to AI
     team_lead: str          # Team lead name
     context: str = ""       # Team context: products, responsibilities
+    extra_jira_fields: dict = field(default_factory=dict)  # Custom Jira fields, e.g. {"customfield_123": "value"}
+    default_task_type_id: str = ""  # Numeric Jira issue type ID (e.g. "10003"); used instead of name if set
 
 
 @dataclass

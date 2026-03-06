@@ -28,4 +28,12 @@ async def generate(
             )
         raw_text = await call_anthropic(system_prompt, user_message, settings.anthropic_api_key)
 
-    return parse_ai_response(raw_text)
+    response = parse_ai_response(raw_text)
+    if response.status == "ready":
+        # Team config is authoritative for type and project
+        response.jira_params["type"] = team.default_task_type
+        response.jira_params["type_id"] = team.default_task_type_id
+        response.jira_params["project"] = team.jira_project
+        if team.extra_jira_fields:
+            response.jira_params["extra_fields"] = team.extra_jira_fields
+    return response
