@@ -16,6 +16,8 @@ class QuestionsForm:
         self.on_submit = on_submit
         self._initial_answers = initial_answers or []
         self._answer_fields: list[ft.TextField] = []
+        self._submit_btn: ft.ElevatedButton | None = None
+        self._submit_loading: ft.ProgressRing | None = None
 
     def get_current_answers(self) -> list[tuple[str, str]]:
         return [
@@ -49,12 +51,36 @@ class QuestionsForm:
                 )
             )
 
+        self._submit_btn = ft.ElevatedButton(
+            "Отправить ответы",
+            icon=ft.Icons.SEND,
+            width=210,
+        )
+        self._submit_loading = ft.ProgressRing(visible=False, width=20, height=20, stroke_width=2)
+
         def submit_clicked(e: ft.ControlEvent) -> None:
             answers = [
                 (self.questions[i], self._answer_fields[i].value or "")
                 for i in range(len(self.questions))
             ]
+            if not any(a.strip() for _, a in answers):
+                snack = ft.SnackBar(
+                    content=ft.Text("Нет данных для отправки", color=ft.Colors.WHITE),
+                    bgcolor=ft.Colors.RED_700,
+                    open=True,
+                )
+                self.page.overlay.append(snack)
+                self.page.update()
+                return
+            if self._submit_btn is not None:
+                self._submit_btn.disabled = True
+                self._submit_btn.update()
+            if self._submit_loading is not None:
+                self._submit_loading.visible = True
+                self._submit_loading.update()
             self.on_submit(answers)
+
+        self._submit_btn.on_click = submit_clicked
 
         return ft.Container(
             padding=16,
@@ -82,13 +108,22 @@ class QuestionsForm:
                     ),
                     ft.Divider(),
                     *question_controls,
-                    ft.ElevatedButton(
-                        "Отправить ответы",
-                        icon=ft.Icons.SEND,
-                        on_click=submit_clicked,
+                    ft.Row(
+                        controls=[self._submit_btn, self._submit_loading],
+                        vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                        spacing=12,
                     ),
                 ],
                 spacing=12,
                 horizontal_alignment=ft.CrossAxisAlignment.STRETCH,
             ),
         )
+
+    def reset_submit(self) -> None:
+        """Re-enable submit button and hide spinner after error or timeout."""
+        if self._submit_btn is not None:
+            self._submit_btn.disabled = False
+            self._submit_btn.update()
+        if self._submit_loading is not None:
+            self._submit_loading.visible = False
+            self._submit_loading.update()

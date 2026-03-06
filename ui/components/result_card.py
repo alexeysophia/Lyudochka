@@ -382,7 +382,9 @@ class ResultCard:
             self._jira_btn.content = "Создать в Jira"
             self._jira_btn.update()
             snack = ft.SnackBar(
-                content=ft.Text(f"Ошибка Jira: {exc}"), open=True
+                content=ft.Text(f"Ошибка Jira: {exc}", color=ft.Colors.WHITE),
+                bgcolor=ft.Colors.RED_700,
+                open=True,
             )
             self.page.overlay.append(snack)
             self.page.update()

@@ -60,10 +60,7 @@ class TeamEditor:
         if self.team and self.team.default_task_type_id:
             _type_id_map[self.team.default_task_type] = self.team.default_task_type_id
 
-        fetch_btn = ft.IconButton(
-            icon=ft.Icons.CLOUD_DOWNLOAD_OUTLINED,
-            tooltip="Получить типы задач и поля из Jira",
-        )
+        fetch_btn = ft.ElevatedButton("Получить поля из Jira", icon=ft.Icons.CLOUD_DOWNLOAD_OUTLINED, expand=True)
         fetch_loading = ft.ProgressRing(visible=False, width=16, height=16, stroke_width=2)
         fetch_status = ft.Text("", size=11, color=ft.Colors.GREY_600, expand=True)
 
@@ -79,6 +76,7 @@ class TeamEditor:
             hint_text="Получите типы из Jira ↑",
             expand=True,
             options=_initial_opts,
+            disabled=True,  # enabled after fetch
         )
 
         async def _do_fetch_meta() -> None:
@@ -121,10 +119,11 @@ class TeamEditor:
             for t in _jira_issue_types:
                 _type_id_map[t["name"]] = t["id"]
 
-            # Update issue type dropdown
+            # Update issue type dropdown and enable it
             current_val = task_type_dropdown.value
             type_names = [t["name"] for t in _jira_issue_types]
             task_type_dropdown.options = [ft.dropdown.Option(t["name"]) for t in _jira_issue_types]
+            task_type_dropdown.disabled = False
             if current_val in type_names:
                 task_type_dropdown.value = current_val
             else:
@@ -364,7 +363,8 @@ class TeamEditor:
         _extra_fields_column = ft.Column(controls=_build_field_rows(), spacing=6)
 
         def _build_add_row() -> ft.Row:
-            if _jira_fields:
+            meta_loaded = bool(_jira_fields)
+            if meta_loaded:
                 key_ctrl: ft.Control = ft.Dropdown(
                     options=[ft.dropdown.Option(f["id"], f["name"]) for f in _jira_fields],
                     hint_text="Выберите поле",
@@ -373,11 +373,14 @@ class TeamEditor:
                 )
             else:
                 key_ctrl = ft.TextField(
-                    hint_text="Поле (напр. priority, affectedVersion)",
+                    hint_text="Сначала получите поля из Jira ↑",
                     dense=True,
                     expand=2,
+                    disabled=True,
                 )
-            val_field = ft.TextField(hint_text="Значение", dense=True, expand=3)
+            val_field = ft.TextField(
+                hint_text="Значение", dense=True, expand=3, disabled=not meta_loaded,
+            )
 
             def do_add(e: ft.ControlEvent) -> None:
                 k = (key_ctrl.value or "").strip()
@@ -394,7 +397,12 @@ class TeamEditor:
                 controls=[
                     key_ctrl,
                     val_field,
-                    ft.IconButton(icon=ft.Icons.ADD, tooltip="Добавить поле", on_click=do_add),
+                    ft.IconButton(
+                        icon=ft.Icons.ADD,
+                        tooltip="Добавить поле",
+                        on_click=do_add,
+                        disabled=not meta_loaded,
+                    ),
                 ],
                 vertical_alignment=ft.CrossAxisAlignment.CENTER,
                 spacing=4,
@@ -539,11 +547,15 @@ class TeamEditor:
                         ft.Row(
                             controls=[
                                 project_field,
-                                fetch_btn,
-                                fetch_loading,
+                                ft.Row(
+                                    controls=[fetch_btn, fetch_loading],
+                                    expand=True,
+                                    vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                                    spacing=6,
+                                ),
                             ],
                             vertical_alignment=ft.CrossAxisAlignment.CENTER,
-                            spacing=4,
+                            spacing=12,
                         ),
                         ft.Row(
                             controls=[fetch_status],

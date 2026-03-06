@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import uuid
 from datetime import datetime
@@ -16,6 +17,9 @@ from data.settings_store import load_settings
 from data.teams_store import load_all_teams
 from ui.components.questions_form import QuestionsForm
 from ui.components.result_card import ResultCard
+
+
+_BTN_W = 210  # unified width for action buttons (Generate, Mic, Save Draft, etc.)
 
 
 class MainScreen:
@@ -49,6 +53,7 @@ class MainScreen:
         self._generate_row: ft.Row | None = None
         self._result_area: ft.Column | None = None
         self._mic_btn: ft.OutlinedButton | None = None
+        self._skip_btn: ft.TextButton | None = None
         self._recording_row: ft.Row | None = None
         self._processing_audio_row: ft.Row | None = None
 
@@ -152,14 +157,13 @@ class MainScreen:
             expand=True,
         )
 
-        self._error_text = ft.Text("", color=ft.Colors.RED_400)
         self._loading = ft.ProgressRing(visible=False, width=24, height=24)
 
         self._generate_btn = ft.ElevatedButton(
             "Сгенерировать",
             icon=ft.Icons.AUTO_AWESOME,
             on_click=self._on_generate_clicked,
-            expand=True,
+            width=_BTN_W,
         )
 
         self._back_btn = ft.TextButton(
@@ -176,10 +180,18 @@ class MainScreen:
             visible=False,
         )
 
+        self._skip_btn = ft.TextButton(
+            "Пропустить",
+            icon=ft.Icons.SKIP_NEXT,
+            on_click=self._on_skip_clicked,
+            visible=False,
+        )
+
         self._save_draft_btn = ft.OutlinedButton(
-            "Сохранить черновик",
+            "Сохранить",
             icon=ft.Icons.BOOKMARK_BORDER,
             on_click=self._save_draft_clicked,
+            width=_BTN_W,
         )
 
         self._result_area = ft.Column(controls=[], spacing=16)
@@ -188,7 +200,7 @@ class MainScreen:
             "Голосовой ввод",
             icon=ft.Icons.MIC,
             on_click=self._on_mic_clicked,
-            expand=True,
+            width=_BTN_W,
         )
 
         self._recording_row = ft.Row(
@@ -233,6 +245,7 @@ class MainScreen:
                         ft.Container(expand=True),
                         self._back_btn,
                         self._forward_btn,
+                        self._skip_btn,
                         self._save_draft_btn,
                     ],
                     vertical_alignment=ft.CrossAxisAlignment.CENTER,
@@ -271,6 +284,33 @@ class MainScreen:
         self._current_questions_form = None
         self._current_ai_response = None
         await self._run_generation(self._user_input_value, None)
+
+    def _clone_draft_clicked(self, e: ft.ControlEvent) -> None:
+        if not self._selected_team or self._current_ai_response is None:
+            return
+        new_response = AIResponse(
+            status=self._current_ai_response.status,
+            task_text=self._current_ai_response.task_text,
+            task_title=self._current_ai_response.task_title,
+            jira_params=dict(self._current_ai_response.jira_params),
+            questions=list(self._current_ai_response.questions),
+            jira_issue_key="",
+        )
+        new_draft = Draft(
+            id=str(uuid.uuid4()),
+            created_at=datetime.now().isoformat(),
+            team_name=self._selected_team.name,
+            user_input=self._user_input_value,
+            stage="ready",
+            questions=list(self._current_questions),
+            answers=list(self._last_submitted_answers),
+            ai_response=new_response,
+        )
+        save_draft(new_draft)
+        self.restore_draft(new_draft)
+        snack = ft.SnackBar(content=ft.Text("Задача клонирована"), open=True)
+        self.page.overlay.append(snack)
+        self.page.update()
 
     def _save_draft_clicked(self, e: ft.ControlEvent) -> None:
         # In ready stage use the stored value (input field is hidden but value is preserved).
@@ -313,10 +353,14 @@ class MainScreen:
         self.page.overlay.append(snack)
         self.page.update()
 
+    def _on_skip_clicked(self, e: ft.ControlEvent) -> None:
+        self.page.run_task(self._run_generation, self._user_input_value, None, True)
+
     async def _run_generation(
         self,
         user_input: str,
         answers: list[tuple[str, str]] | None,
+        force_complete: bool = False,
     ) -> None:
         self._set_loading(True)
         self._clear_result()
@@ -324,16 +368,27 @@ class MainScreen:
 
         try:
             settings = load_settings()
-            response = await generate(
-                team=self._selected_team,
-                user_input=user_input,
-                answers=answers,
-                settings=settings,
+            response = await asyncio.wait_for(
+                generate(
+                    team=self._selected_team,
+                    user_input=user_input,
+                    answers=answers,
+                    settings=settings,
+                    force_complete=force_complete,
+                ),
+                timeout=30.0,
             )
             self._handle_response(response, user_input)
+        except asyncio.TimeoutError:
+            log.error("Task generation timed out after 30s")
+            self._show_error("Превышено время ожидания (30 с). Попробуйте ещё раз.")
+            if self._current_questions_form is not None:
+                self._current_questions_form.reset_submit()
         except Exception as exc:
             log.exception("Task generation failed")
             self._show_error(str(exc))
+            if self._current_questions_form is not None:
+                self._current_questions_form.reset_submit()
         finally:
             self._set_loading(False)
             self.page.update()
@@ -384,17 +439,22 @@ class MainScreen:
             self._forward_btn.disabled = loading
         if self._save_draft_btn is not None:
             self._save_draft_btn.disabled = loading
+        if self._skip_btn is not None:
+            self._skip_btn.disabled = loading
         self.page.update()
 
     def _show_error(self, message: str) -> None:
         log.error("UI error: %s", message)
-        if self._error_text is not None:
-            self._error_text.value = message
+        snack = ft.SnackBar(
+            content=ft.Text(message, color=ft.Colors.WHITE),
+            bgcolor=ft.Colors.RED_700,
+            open=True,
+        )
+        self.page.overlay.append(snack)
         self.page.update()
 
     def _clear_error(self) -> None:
-        if self._error_text is not None:
-            self._error_text.value = ""
+        pass  # SnackBars dismiss automatically
 
     def _clear_result(self) -> None:
         if self._result_area is not None:
@@ -406,7 +466,6 @@ class MainScreen:
                 self._generate_btn,
                 self._mic_btn,
                 self._loading,
-                self._error_text,
             ],
             vertical_alignment=ft.CrossAxisAlignment.CENTER,
             spacing=12,
@@ -427,9 +486,20 @@ class MainScreen:
             self._back_btn.visible = True
         if self._forward_btn is not None:
             self._forward_btn.visible = False
+        if self._skip_btn is not None:
+            self._skip_btn.visible = False
         if self._save_draft_btn is not None:
-            self._save_draft_btn.content = "Сохранить"
-            self._save_draft_btn.icon = ft.Icons.BOOKMARK_BORDER
+            in_jira = bool(
+                self._current_ai_response and self._current_ai_response.jira_issue_key
+            )
+            if in_jira:
+                self._save_draft_btn.content = "Клонировать"
+                self._save_draft_btn.icon = ft.Icons.COPY_ALL
+                self._save_draft_btn.on_click = self._clone_draft_clicked
+            else:
+                self._save_draft_btn.content = "Сохранить"
+                self._save_draft_btn.icon = ft.Icons.BOOKMARK_BORDER
+                self._save_draft_btn.on_click = self._save_draft_clicked
 
     def _set_clarification_view(self) -> None:
         """Switch to clarification stage: make inputs read-only, show Back button."""
@@ -447,8 +517,10 @@ class MainScreen:
             self._back_btn.visible = True
         if self._forward_btn is not None:
             self._forward_btn.visible = self._current_ai_response is not None
+        if self._skip_btn is not None:
+            self._skip_btn.visible = True
         if self._save_draft_btn is not None:
-            self._save_draft_btn.content = "Сохранить черновик"
+            self._save_draft_btn.content = "Сохранить"
             self._save_draft_btn.icon = ft.Icons.BOOKMARK_BORDER
 
     def _set_input_view(self) -> None:
@@ -467,8 +539,10 @@ class MainScreen:
             self._back_btn.visible = False
         if self._forward_btn is not None:
             self._forward_btn.visible = bool(self._current_questions)
+        if self._skip_btn is not None:
+            self._skip_btn.visible = False
         if self._save_draft_btn is not None:
-            self._save_draft_btn.content = "Сохранить черновик"
+            self._save_draft_btn.content = "Сохранить"
             self._save_draft_btn.icon = ft.Icons.BOOKMARK_BORDER
 
     def _on_back_clicked(self, e: ft.ControlEvent) -> None:

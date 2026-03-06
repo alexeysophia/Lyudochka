@@ -10,10 +10,11 @@ async def generate(
     user_input: str,
     answers: list[tuple[str, str]] | None,
     settings: Settings,
+    force_complete: bool = False,
 ) -> AIResponse:
     """Route AI call to Anthropic or Gemini and return a parsed AIResponse."""
     system_prompt = build_system_prompt(team)
-    user_message = build_user_message(user_input, answers)
+    user_message = build_user_message(user_input, answers, force_complete=force_complete)
 
     if settings.default_llm == "gemini":
         if not settings.gemini_api_key:

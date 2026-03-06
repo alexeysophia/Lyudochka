@@ -58,6 +58,7 @@ def build_system_prompt(team: Team) -> str:
 def build_user_message(
     user_input: str,
     answers: list[tuple[str, str]] | None = None,
+    force_complete: bool = False,
 ) -> str:
     """Build the user message, optionally appending Q&A from clarification round."""
     message = f"Запрос на создание задачи:\n{user_input}"
@@ -66,5 +67,12 @@ def build_user_message(
         message += "\n\n## Ответы на уточняющие вопросы:\n"
         for question, answer in answers:
             message += f"\nВопрос: {question}\nОтвет: {answer}\n"
+
+    if force_complete:
+        message += (
+            "\n\n## ВАЖНО: Пользователь пропустил уточнение.\n"
+            "Сформируй задачу НЕМЕДЛЕННО — не задавай вопросов.\n"
+            "Для всех недостающих данных используй значение «Нет данных»."
+        )
 
     return message
