@@ -483,11 +483,11 @@ class TeamEditor:
                     )
                 else:
                     _type_id_field = ft.TextField(
-                        hint_text="typeId из URL Jira (необяз.)",
+                        label="TypeID",
                         dense=True,
-                        width=190,
+                        width=90,
                         keyboard_type=ft.KeyboardType.NUMBER,
-                        tooltip="Из URL: ObjectSchema.jspa?id=…&typeId=XXXX",
+                        tooltip="Из URL Jira: ObjectSchema.jspa?id=…&typeId=XXXX",
                     )
 
                     async def _do_fetch_insight(e: ft.ControlEvent) -> None:
@@ -740,9 +740,38 @@ class TeamEditor:
         _extra_fields_column = ft.Column(controls=_build_field_rows(), spacing=6)
         _add_field_row_container = ft.Container(content=_build_add_row())
 
+        _extra_jira_help = (
+            "Здесь можно задать дополнительные поля Jira, которые будут автоматически "
+            "заполняться при создании задачи.\n\n"
+            "Как добавить поле:\n"
+            "1. Нажмите «Получить поля из Jira» — загрузится список доступных полей.\n"
+            "2. Выберите поле из выпадающего списка слева.\n"
+            "3. Укажите значение (текст, выбор из списка или Insight-объекты).\n"
+            "4. Нажмите «+» для добавления.\n\n"
+            "Insight/Assets-поля (справочники):\n"
+            "Для таких полей появится кнопка «Получить значения». "
+            "Если Jira возвращает объекты из нескольких схем или нужные объекты не находятся — "
+            "укажите TypeID.\n\n"
+            "Что такое TypeID:\n"
+            "TypeID — числовой идентификатор типа объекта в Insight/Assets. "
+            "Найти его можно в URL страницы Jira Assets: "
+            "ObjectSchema.jspa?id=XX&typeId=YYYY — нужно число после «typeId=»."
+        )
         extra_jira_section = ft.Column(
             controls=[
-                ft.Text("Дополнительные поля Jira", size=13, weight=ft.FontWeight.W_500),
+                ft.Row(
+                    controls=[
+                        ft.Text("Дополнительные поля Jira", size=13, weight=ft.FontWeight.W_500),
+                        ft.IconButton(
+                            icon=ft.Icons.HELP_OUTLINE,
+                            icon_size=16,
+                            tooltip=_extra_jira_help,
+                            style=ft.ButtonStyle(padding=ft.padding.all(2)),
+                        ),
+                    ],
+                    vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                    spacing=0,
+                ),
                 _add_field_row_container,
                 ft.Divider(height=1),
                 _extra_fields_column,
