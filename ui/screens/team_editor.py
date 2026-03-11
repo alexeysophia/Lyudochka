@@ -97,7 +97,7 @@ class TeamEditor:
         )
 
         # --- Add-row state (tracks selected field + accumulated multi-values) ---
-        _add_row_state: list[dict] = [{"field_id": None, "multi_ids": []}]
+        _add_row_state: list[dict] = [{"field_id": None, "multi_ids": [], "schema_filter": None}]
 
         # Forward declaration — assigned below after _build_add_row is defined
         _add_field_row_container: ft.Container
@@ -144,7 +144,7 @@ class TeamEditor:
             task_type_dropdown.update()
 
             # Rebuild add-row (now has field meta with allowed_values)
-            _add_row_state[0] = {"field_id": None, "multi_ids": []}
+            _add_row_state[0] = {"field_id": None, "multi_ids": [], "schema_filter": None}
             _add_field_row_container.content = _build_add_row()
             self.page.update()
             _extra_fields_column.controls = _build_field_rows()
@@ -473,6 +473,14 @@ class TeamEditor:
                         expand=3,
                     )
                 else:
+                    _type_id_field = ft.TextField(
+                        hint_text="typeId из URL Jira (необяз.)",
+                        dense=True,
+                        width=190,
+                        keyboard_type=ft.KeyboardType.NUMBER,
+                        tooltip="Из URL: ObjectSchema.jspa?id=…&typeId=XXXX",
+                    )
+
                     async def _do_fetch_insight(e: ft.ControlEvent) -> None:
                         _add_row_state[0]["loading"] = True
                         _add_field_row_container.content = _build_add_row()
@@ -481,26 +489,53 @@ class TeamEditor:
                             settings = load_settings()
                             if not settings.jira_url or not settings.jira_token:
                                 raise ValueError("Настройте подключение к Jira в Настройках")
+                            raw_tid = (_type_id_field.value or "").strip()
+                            explicit_type_id = int(raw_tid) if raw_tid.isdigit() else None
                             objects = await get_insight_objects(
-                                settings.jira_url, settings.jira_token, cur_fmeta["name"]
+                                settings.jira_url, settings.jira_token,
+                                cur_fmeta["name"], cur_fid or "",
+                                object_type_id=explicit_type_id,
                             )
                             # Store fetched values into _jira_fields for this field
                             idx = next((i for i, f in enumerate(_jira_fields) if f["id"] == cur_fid), None)
                             if idx is not None:
                                 _jira_fields[idx]["allowed_values"] = objects
                                 _jira_fields[idx]["multi"] = True
-                            _add_row_state[0] = {"field_id": cur_fid, "multi_ids": [], "loading": False}
+                                if explicit_type_id is not None:
+                                    _jira_fields[idx]["insight_schemas"] = []
+                                else:
+                                    seen_schemas: list = []
+                                    for o in objects:
+                                        sid = o.get("schema_id")
+                                        if sid is not None and sid not in seen_schemas:
+                                            seen_schemas.append(sid)
+                                    _jira_fields[idx]["insight_schemas"] = seen_schemas if len(seen_schemas) > 1 else []
+                            _add_row_state[0] = {"field_id": cur_fid, "multi_ids": [], "loading": False, "schema_filter": None}
                         except Exception as exc:
                             _add_row_state[0]["loading"] = False
                             error_snack(self.page, str(exc))
                         _add_field_row_container.content = _build_add_row()
                         self.page.update()
 
-                    val_ctrl = ft.ElevatedButton(
-                        "Получить значения",
-                        icon=ft.Icons.CLOUD_DOWNLOAD_OUTLINED,
-                        on_click=lambda e: self.page.run_task(_do_fetch_insight, e),
+                    val_ctrl = ft.Column(
+                        controls=[
+                            ft.Row(
+                                controls=[
+                                    _type_id_field,
+                                    ft.ElevatedButton(
+                                        "Получить значения",
+                                        icon=ft.Icons.CLOUD_DOWNLOAD_OUTLINED,
+                                        on_click=lambda e: self.page.run_task(_do_fetch_insight, e),
+                                        expand=True,
+                                    ),
+                                ],
+                                spacing=6,
+                                vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                            ),
+                        ],
+                        spacing=0,
                         expand=3,
+                        horizontal_alignment=ft.CrossAxisAlignment.STRETCH,
                     )
 
                 def get_val() -> str:
@@ -509,11 +544,42 @@ class TeamEditor:
             elif is_insight or cur_fmeta["multi"]:
                 # Multi-select: dropdown picker + chips
                 already_ids = set(cur_multi_ids)
+                cur_schema_filter = state.get("schema_filter")
+                insight_schemas: list = cur_fmeta.get("insight_schemas", [])
+
+                def on_schema_select(e: ft.ControlEvent) -> None:
+                    val = e.control.value
+                    _add_row_state[0]["schema_filter"] = int(val) if val else None
+                    _add_field_row_container.content = _build_add_row()
+                    self.page.update()
+
+                schema_filter_row: ft.Control | None = None
+                if insight_schemas:
+                    schema_filter_row = ft.Row(
+                        controls=[
+                            ft.Text("Схема:", size=12, color=ft.Colors.GREY_600),
+                            ft.Dropdown(
+                                options=[ft.dropdown.Option(str(sid), f"Схема {sid}") for sid in insight_schemas],
+                                value=str(cur_schema_filter) if cur_schema_filter is not None else None,
+                                hint_text="Все схемы",
+                                dense=True,
+                                expand=True,
+                                on_select=on_schema_select,
+                            ),
+                        ],
+                        vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                        spacing=6,
+                    )
+
+                filtered_avs = [
+                    av for av in cur_fmeta["allowed_values"]
+                    if av["id"] not in already_ids
+                    and (cur_schema_filter is None or av.get("schema_id") == cur_schema_filter)
+                ]
                 pick_dd = ft.Dropdown(
                     options=[
                         ft.dropdown.Option(av["id"], av["name"])
-                        for av in cur_fmeta["allowed_values"]
-                        if av["id"] not in already_ids
+                        for av in filtered_avs
                     ],
                     hint_text="Добавить значение...",
                     dense=True,
@@ -527,7 +593,7 @@ class TeamEditor:
                         _add_field_row_container.content = _build_add_row()
                         self.page.update()
 
-                val_ctrl = ft.Row(
+                picker_row = ft.Row(
                     controls=[
                         pick_dd,
                         ft.IconButton(
@@ -539,7 +605,17 @@ class TeamEditor:
                     ],
                     vertical_alignment=ft.CrossAxisAlignment.CENTER,
                     spacing=4,
+                    expand=True,
+                )
+                val_ctrl_controls: list[ft.Control] = []
+                if schema_filter_row is not None:
+                    val_ctrl_controls.append(schema_filter_row)
+                val_ctrl_controls.append(picker_row)
+                val_ctrl = ft.Column(
+                    controls=val_ctrl_controls,
+                    spacing=4,
                     expand=3,
+                    horizontal_alignment=ft.CrossAxisAlignment.STRETCH,
                 )
 
                 for vid in cur_multi_ids:

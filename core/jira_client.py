@@ -212,20 +212,64 @@ async def create_jira_issue(
     return key
 
 
-async def get_insight_objects(jira_url: str, token: str, field_name: str) -> list[dict]:
-    """Fetch Insight/Assets objects for a field using IQL search by object type name.
+async def _get_insight_field_config(
+    jira_url: str, token: str, field_id: str
+) -> list[int]:
+    """Return objectTypeIds from Insight field config, or empty list on failure."""
+    url = f"{jira_url.rstrip('/')}/rest/insight/1.0/config/field/{field_id}"
+    headers = {"Authorization": f"Bearer {token}", "Accept": "application/json"}
+    try:
+        async with httpx.AsyncClient(verify=False, timeout=15.0) as client:
+            resp = await client.get(url, headers=headers)
+        log.debug("Insight field config %s: status=%s body=%s", field_id, resp.status_code, resp.text[:300])
+        if resp.status_code == 200:
+            data = resp.json()
+            ids = data.get("objectTypeIds", [])
+            log.debug("Insight field config for %s: objectTypeIds=%s", field_id, ids)
+            return [int(i) for i in ids if i is not None]
+    except Exception as exc:
+        log.debug("Could not fetch Insight field config for %s: %s", field_id, exc)
+    return []
 
-    Derives the Insight object type name from the field display name
-    (strips parenthetical suffix, e.g. "Бизнес-сегмент (справочник)" → "Бизнес-сегмент").
-    Returns [{"id": objectKey, "name": label}].
+
+async def get_insight_objects(
+    jira_url: str, token: str, field_name: str, field_id: str = "",
+    object_type_id: int | None = None,
+) -> list[dict]:
+    """Fetch Insight/Assets objects for a field.
+
+    Priority for IQL building:
+    1. object_type_id (explicit, most precise): objectTypeId = {id}
+    2. field_id → config endpoint: objectTypeId = {id from config}
+    3. Fallback: objectType = "{derived name}"
+    Returns [{"id": objectKey, "name": label, "schema_id": ...}].
     """
+    headers = {"Authorization": f"Bearer {token}", "Accept": "application/json"}
+    base = jira_url.rstrip("/")
+
+    # Always derive type_name as fallback label for error messages
     type_name = re.sub(r"\s*\(.*?\)\s*$", "", field_name).strip()
-    iql = f'objectType = "{type_name}"'
+
+    iql: str
+    if object_type_id is not None:
+        iql = f"objectTypeId = {object_type_id}"
+        log.debug("Insight IQL by explicit objectTypeId: %s", iql)
+    elif field_id:
+        type_ids = await _get_insight_field_config(jira_url, token, field_id)
+        if type_ids:
+            cond = " OR ".join(f"objectTypeId = {tid}" for tid in type_ids)
+            iql = f"({cond})" if len(type_ids) > 1 else f"objectTypeId = {type_ids[0]}"
+            log.debug("Insight IQL by objectTypeId from config: %s", iql)
+        else:
+            iql = f'objectType = "{type_name}"'
+            log.debug("Insight IQL fallback by name: %s", iql)
+    else:
+        iql = f'objectType = "{type_name}"'
+
     url = (
-        f"{jira_url.rstrip('/')}/rest/insight/1.0/iql/objects"
+        f"{base}/rest/insight/1.0/iql/objects"
         f"?iql={urllib.parse.quote(iql)}&maxResults=200&includeAttributes=false"
     )
-    headers = {"Authorization": f"Bearer {token}", "Accept": "application/json"}
 
     log.debug("Insight IQL request: %s", url)
     try:
@@ -244,7 +288,11 @@ async def get_insight_objects(jira_url: str, token: str, field_name: str) -> lis
     raw = resp.json()
     entries = raw.get("objectEntries", [])
     result: list[dict] = [
-        {"id": obj.get("objectKey", ""), "name": obj.get("label", obj.get("objectKey", ""))}
+        {
+            "id": obj.get("objectKey", ""),
+            "name": obj.get("label", obj.get("objectKey", "")),
+            "schema_id": obj.get("objectType", {}).get("objectSchemaId"),
+        }
         for obj in entries
         if obj.get("objectKey")
     ]

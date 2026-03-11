@@ -111,7 +111,7 @@ Team(name, jira_project, default_task_type, rules, team_lead,
 
 **Jira field normalization** (`jira_client._normalize_field`): converts JQL-style names to REST API names (e.g. `fixversion` → `fixVersions`), `cf[12345]` shorthand → `customfield_12345`, wraps string values in `{"name": "..."}` or `[{"name": "..."}]` based on field type; already-JSON values are passed as-is.
 
-**Insight/Assets fields**: `get_insight_objects(jira_url, token, field_name)` fetches objects via IQL (`objectType = "<derived_name>"`). Field display name is used to derive type name (strips parenthetical suffix). Returns `[{"id": objectKey, "name": label}]`.
+**Insight/Assets fields**: `get_insight_objects(jira_url, token, field_name, field_id="")` fetches objects for a field. When `field_id` is provided, first calls `GET /rest/insight/1.0/config/field/{field_id}` to get `objectTypeIds` and queries by `objectTypeId = {id}` (avoids cross-schema collisions). Falls back to `objectType = "<derived_name>"` IQL where name is derived from field display name (strips parenthetical suffix). Returns `[{"id": objectKey, "name": label}]`.
 
 **TeamEditor Jira meta**: calls `get_project_meta(jira_url, token, project_key)` on demand to populate issue type dropdown and extra-fields UI (dropdowns, multi-select chips, Insight pickers). Meta is saved back to `Team.jira_fields_meta` / `Team.jira_issue_types_meta`.
 
