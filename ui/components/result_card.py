@@ -4,6 +4,7 @@ import subprocess
 import flet as ft
 
 from core.jira_client import create_jira_issue
+from core.jira_markup import jira_to_md
 from data.models import AIResponse
 from data.settings_store import load_settings
 from data.teams_store import load_all_teams
@@ -78,43 +79,43 @@ class ResultCard:
             controls=[
                 ft.IconButton(
                     icon=ft.Icons.FORMAT_BOLD,
-                    tooltip="Жирный (**текст**)",
-                    on_click=lambda e: af("**", "**"),
-                    icon_size=18,
-                    style=ft.ButtonStyle(padding=ft.padding.all(4)),
-                ),
-                ft.IconButton(
-                    icon=ft.Icons.FORMAT_ITALIC,
-                    tooltip="Курсив (*текст*)",
+                    tooltip="Жирный (*текст*)",
                     on_click=lambda e: af("*", "*"),
                     icon_size=18,
                     style=ft.ButtonStyle(padding=ft.padding.all(4)),
                 ),
                 ft.IconButton(
+                    icon=ft.Icons.FORMAT_ITALIC,
+                    tooltip="Курсив (_текст_)",
+                    on_click=lambda e: af("_", "_"),
+                    icon_size=18,
+                    style=ft.ButtonStyle(padding=ft.padding.all(4)),
+                ),
+                ft.IconButton(
                     icon=ft.Icons.CODE,
-                    tooltip="Код (`текст`)",
-                    on_click=lambda e: af("`", "`"),
+                    tooltip="Код ({{текст}})",
+                    on_click=lambda e: af("{{", "}}"),
                     icon_size=18,
                     style=ft.ButtonStyle(padding=ft.padding.all(4)),
                 ),
                 ft.IconButton(
                     icon=ft.Icons.FORMAT_UNDERLINED,
-                    tooltip="Подчёркнутый (<u>текст</u>)",
-                    on_click=lambda e: af("<u>", "</u>"),
+                    tooltip="Подчёркнутый (+текст+)",
+                    on_click=lambda e: af("+", "+"),
                     icon_size=18,
                     style=ft.ButtonStyle(padding=ft.padding.all(4)),
                 ),
                 ft.IconButton(
                     icon=ft.Icons.FORMAT_STRIKETHROUGH,
-                    tooltip="Зачёркнутый (~~текст~~)",
-                    on_click=lambda e: af("~~", "~~"),
+                    tooltip="Зачёркнутый (-текст-)",
+                    on_click=lambda e: af("-", "-"),
                     icon_size=18,
                     style=ft.ButtonStyle(padding=ft.padding.all(4)),
                 ),
                 ft.IconButton(
                     icon=ft.Icons.FORMAT_LIST_BULLETED,
-                    tooltip="Список (- пункт)",
-                    on_click=lambda e: af("\n- ", ""),
+                    tooltip="Список (* пункт)",
+                    on_click=lambda e: af("\n* ", ""),
                     icon_size=18,
                     style=ft.ButtonStyle(padding=ft.padding.all(4)),
                 ),
@@ -393,7 +394,7 @@ class ResultCard:
         else:
             self._edit_field = None
             return ft.Markdown(
-                value=self._task_text,
+                value=jira_to_md(self._task_text),
                 selectable=True,
                 extension_set=ft.MarkdownExtensionSet.GITHUB_WEB,
                 soft_line_break=True,

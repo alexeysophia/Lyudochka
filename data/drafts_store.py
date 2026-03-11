@@ -1,8 +1,12 @@
 import json
+import logging
 import os
 from pathlib import Path
 
+from core.jira_markup import markdown_to_jira
 from data.models import AIResponse, Draft
+
+log = logging.getLogger(__name__)
 
 
 def _drafts_dir() -> Path:
@@ -71,6 +75,28 @@ def load_all_drafts() -> list[Draft]:
         except Exception:
             pass
     return result
+
+
+def migrate_drafts_to_jira_markup() -> None:
+    """One-time migration: convert Markdown task_text to Jira wiki markup in all drafts."""
+    _MD_PATTERNS = ("**", "## ", "---")
+    converted = 0
+    for path in _drafts_dir().glob("*.json"):
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+            ar = data.get("ai_response")
+            if not ar:
+                continue
+            text = ar.get("task_text", "")
+            if not text or not any(p in text for p in _MD_PATTERNS):
+                continue
+            ar["task_text"] = markdown_to_jira(text)
+            path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+            converted += 1
+        except Exception as exc:
+            log.warning("migrate_drafts: skipped %s: %s", path.name, exc)
+    if converted:
+        log.info("migrate_drafts_to_jira_markup: converted %d draft(s)", converted)
 
 
 def delete_draft(draft_id: str) -> None:

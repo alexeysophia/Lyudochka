@@ -25,7 +25,7 @@ _SYSTEM_PROMPT_TEMPLATE = """\
 {{
   "status": "ready",
   "task_title": "Краткое название задачи",
-  "task_text": "Полное описание задачи в формате Markdown",
+  "task_text": "Полное описание задачи в формате Jira wiki markup",
   "jira_params": {{
     "project": "{jira_project}",
     "type": "Story/Bug/Task",
@@ -38,6 +38,14 @@ _SYSTEM_PROMPT_TEMPLATE = """\
   "status": "need_clarification",
   "questions": ["Вопрос 1?", "Вопрос 2?"]
 }}
+
+Форматирование task_text — только Jira wiki markup:
+- Жирный: *текст* (одна звёздочка)
+- Курсив: _текст_
+- Заголовок: h2. Текст
+- Список: * пункт
+- Код: {{код}}
+- НЕ использовать: **двойные звёздочки**, ## решётки, --- горизонтальные линии, Markdown-разметку.
 
 Отвечай на русском языке. Не добавляй никакого текста вне JSON-объекта.\
 """

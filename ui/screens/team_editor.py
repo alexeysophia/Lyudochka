@@ -209,48 +209,48 @@ class TeamEditor:
             controls=[
                 ft.IconButton(
                     icon=ft.Icons.FORMAT_BOLD,
-                    tooltip="Жирный (**текст**)",
-                    on_click=lambda e: apply_format("**", "**"),
-                    icon_size=18,
-                    style=ft.ButtonStyle(padding=ft.padding.all(4)),
-                ),
-                ft.IconButton(
-                    icon=ft.Icons.FORMAT_ITALIC,
-                    tooltip="Курсив (*текст*)",
+                    tooltip="Жирный (*текст*)",
                     on_click=lambda e: apply_format("*", "*"),
                     icon_size=18,
                     style=ft.ButtonStyle(padding=ft.padding.all(4)),
                 ),
                 ft.IconButton(
+                    icon=ft.Icons.FORMAT_ITALIC,
+                    tooltip="Курсив (_текст_)",
+                    on_click=lambda e: apply_format("_", "_"),
+                    icon_size=18,
+                    style=ft.ButtonStyle(padding=ft.padding.all(4)),
+                ),
+                ft.IconButton(
                     icon=ft.Icons.CODE,
-                    tooltip="Код (`текст`)",
-                    on_click=lambda e: apply_format("`", "`"),
+                    tooltip="Код ({{текст}})",
+                    on_click=lambda e: apply_format("{{", "}}"),
                     icon_size=18,
                     style=ft.ButtonStyle(padding=ft.padding.all(4)),
                 ),
                 ft.IconButton(
                     icon=ft.Icons.FORMAT_UNDERLINED,
-                    tooltip="Подчёркнутый (<u>текст</u>)  Ctrl+U",
-                    on_click=lambda e: apply_format("<u>", "</u>"),
+                    tooltip="Подчёркнутый (+текст+)  Ctrl+U",
+                    on_click=lambda e: apply_format("+", "+"),
                     icon_size=18,
                     style=ft.ButtonStyle(padding=ft.padding.all(4)),
                 ),
                 ft.IconButton(
                     icon=ft.Icons.FORMAT_STRIKETHROUGH,
-                    tooltip="Зачёркнутый (~~текст~~)",
-                    on_click=lambda e: apply_format("~~", "~~"),
+                    tooltip="Зачёркнутый (-текст-)",
+                    on_click=lambda e: apply_format("-", "-"),
                     icon_size=18,
                     style=ft.ButtonStyle(padding=ft.padding.all(4)),
                 ),
                 ft.IconButton(
                     icon=ft.Icons.FORMAT_LIST_BULLETED,
-                    tooltip="Список (- пункт)",
-                    on_click=lambda e: apply_format("\n- ", ""),
+                    tooltip="Список (* пункт)",
+                    on_click=lambda e: apply_format("\n* ", ""),
                     icon_size=18,
                     style=ft.ButtonStyle(padding=ft.padding.all(4)),
                 ),
                 ft.VerticalDivider(width=12),
-                ft.Text("Markdown", size=11, color=ft.Colors.GREY_500, italic=True),
+                ft.Text("Jira wiki", size=11, color=ft.Colors.GREY_500, italic=True),
             ],
             spacing=0,
             vertical_alignment=ft.CrossAxisAlignment.CENTER,
@@ -749,11 +749,11 @@ class TeamEditor:
             if not _rules_edit_mode[0]:
                 return
             if e.ctrl and e.key.lower() == "b":
-                apply_format("**", "**")
-            elif e.ctrl and e.key.lower() == "i":
                 apply_format("*", "*")
+            elif e.ctrl and e.key.lower() == "i":
+                apply_format("_", "_")
             elif e.ctrl and e.key.lower() == "u":
-                apply_format("<u>", "</u>")
+                apply_format("+", "+")
             elif e.shift and e.key == "End":
                 field = _rules_field[0]
                 if field is None:

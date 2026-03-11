@@ -1,6 +1,7 @@
 import json
 import re
 
+from core.jira_markup import markdown_to_jira
 from data.models import AIResponse
 
 
@@ -46,7 +47,7 @@ def _build_response(data: dict) -> AIResponse:
         return AIResponse(
             status="ready",
             task_title=data.get("task_title", ""),
-            task_text=data.get("task_text", ""),
+            task_text=markdown_to_jira(data.get("task_text", "")),
             jira_params=data.get("jira_params", {}),
         )
 
