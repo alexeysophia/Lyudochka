@@ -42,9 +42,10 @@ core/anthropic_client.py     # async call_anthropic()
 core/gemini_client.py        # async call_gemini() (uses asyncio.to_thread)
 core/prompt_builder.py       # build_system_prompt(team), build_user_message(input, answers)
 core/response_parser.py      # parse_ai_response(raw_text) → AIResponse
-core/jira_client.py          # async create_jira_issue(), get_project_meta()
+core/jira_client.py          # async create_jira_issue(), get_project_meta(), get_insight_objects()
 core/audio_recorder.py       # AudioRecorder: start/stop/cancel → WAV via sounddevice
 core/voice_processor.py      # async process_voice() → VoiceResult via Gemini
+core/logger.py               # setup_logging() — call once at startup; logs to %APPDATA%\Lyudochka\lyudochka.log
 data/models.py               # Team, Settings, AIResponse, VoiceResult, Draft dataclasses
 data/settings_store.py       # load/save %APPDATA%\Lyudochka\settings.json
 data/teams_store.py          # load/save/delete %APPDATA%\Lyudochka\teams\{name}.json
@@ -82,13 +83,41 @@ data/drafts_store.py         # save/load/delete %APPDATA%\Lyudochka\drafts\{id}.
 **Team uniqueness** (in `data/teams_store.py`):
 - `is_name_taken(name, exclude_name="")` / `is_lead_taken(lead, exclude_name="")` — used in `team_editor.py`
 
+**Team model** (full `data/models.py`):
+```python
+Team(name, jira_project, default_task_type, rules, team_lead,
+     context="",                  # products/responsibilities shown to AI
+     extra_jira_fields={},        # saved custom field values e.g. {"customfield_123": "value"}
+     default_task_type_id="",     # numeric issue type ID; used instead of name when set
+     jira_fields_meta=[],         # [{id, name, multi, allowed_values, insight}] from createmeta
+     jira_issue_types_meta=[])    # [{id, name}] from createmeta
+```
+
+**`jira_params` dict** (from AI JSON + used in `result_card.py`):
+```python
+{"project": "KEY", "type": "Story", "type_id": "10003",
+ "labels": ["tag1"], "extra_fields": {"customfield_123": "value"}}
+```
+
 **Voice input** always uses Gemini (Anthropic doesn't support audio). Shows error if no `gemini_api_key`.
 
 **Draft model stages**: `"input"` | `"clarification"` | `"ready"`
 
+**Skip clarification**: `build_user_message(..., force_complete=True)` adds an instruction forcing the AI to return a ready task immediately without asking questions; triggered by the skip checkbox in `main_screen.py`.
+
 **Jira issue type**: prefer `issue_type_id` (numeric) over `issue_type` (name) to avoid locale rejection by Jira Server.
 
 **Epic**: `customfield_15501` is set to `summary` automatically for Epic type.
+
+**Jira field normalization** (`jira_client._normalize_field`): converts JQL-style names to REST API names (e.g. `fixversion` → `fixVersions`), `cf[12345]` shorthand → `customfield_12345`, wraps string values in `{"name": "..."}` or `[{"name": "..."}]` based on field type; already-JSON values are passed as-is.
+
+**Insight/Assets fields**: `get_insight_objects(jira_url, token, field_name)` fetches objects via IQL (`objectType = "<derived_name>"`). Field display name is used to derive type name (strips parenthetical suffix). Returns `[{"id": objectKey, "name": label}]`.
+
+**TeamEditor Jira meta**: calls `get_project_meta(jira_url, token, project_key)` on demand to populate issue type dropdown and extra-fields UI (dropdowns, multi-select chips, Insight pickers). Meta is saved back to `Team.jira_fields_meta` / `Team.jira_issue_types_meta`.
+
+**ResultCard edit mode**: clicking the edit icon (pencil) switches task description from `ft.Markdown` display to a `ft.TextField` with a Markdown formatting toolbar (bold/italic/code/underline/strikethrough/list buttons). Saves with check icon; `_task_text` holds the mutable value used for Jira creation.
+
+**Logging**: call `setup_logging()` from `core.logger` once in `main.py` before `ft.run()`. Use `logging.getLogger(__name__)` in every module. Log is cleared on each startup. Root logger = WARNING; `core`/`ui`/`data`/`__main__` loggers = DEBUG.
 
 ## Build & Distribution
 
