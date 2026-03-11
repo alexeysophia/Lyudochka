@@ -663,6 +663,24 @@ class TeamEditor:
                         return ""
                     return json.dumps({"id": vid})
 
+            # Determine initial disabled state for add button
+            if cur_fmeta is None or is_loading:
+                _add_btn_disabled = True
+            elif is_insight or cur_fmeta["multi"]:
+                _add_btn_disabled = len(cur_multi_ids) == 0
+            else:
+                _add_btn_disabled = not bool(get_val())
+
+            _add_btn_ref: list[ft.IconButton | None] = [None]
+
+            def _refresh_add_btn() -> None:
+                btn = _add_btn_ref[0]
+                if btn is None:
+                    return
+                enabled = bool((key_dd.value or "").strip()) and bool(get_val())
+                btn.disabled = not enabled
+                btn.update()
+
             def do_add(e: ft.ControlEvent) -> None:
                 k = (key_dd.value or "").strip()
                 v = get_val()
@@ -674,16 +692,35 @@ class TeamEditor:
                     _add_field_row_container.content = _build_add_row()
                     self.page.update()
 
+            # Wire up live value-change callbacks to enable/disable add button
+            if isinstance(val_ctrl, ft.TextField):
+                _orig_on_change = val_ctrl.on_change
+                def _on_val_change(e: ft.ControlEvent) -> None:
+                    if _orig_on_change:
+                        _orig_on_change(e)
+                    _refresh_add_btn()
+                val_ctrl.on_change = _on_val_change
+            elif isinstance(val_ctrl, ft.Dropdown):
+                _orig_on_select = val_ctrl.on_select
+                def _on_val_select(e: ft.ControlEvent) -> None:
+                    if _orig_on_select:
+                        _orig_on_select(e)
+                    _refresh_add_btn()
+                val_ctrl.on_select = _on_val_select
+
+            _add_btn = ft.IconButton(
+                icon=ft.Icons.ADD,
+                tooltip="Добавить поле",
+                on_click=do_add,
+                disabled=_add_btn_disabled,
+            )
+            _add_btn_ref[0] = _add_btn
+
             main_row = ft.Row(
                 controls=[
                     key_dd,
                     val_ctrl,
-                    ft.IconButton(
-                        icon=ft.Icons.ADD,
-                        tooltip="Добавить поле",
-                        on_click=do_add,
-                        disabled=is_loading,
-                    ),
+                    _add_btn,
                 ],
                 vertical_alignment=ft.CrossAxisAlignment.CENTER,
                 spacing=4,
