@@ -203,11 +203,11 @@ class ResultCard:
             controls += [
                 ft.Row(
                     controls=[
-                        ft.Text("Название задачи", size=11, color=ft.Colors.GREY_600),
-                        ft.Container(expand=True),
                         self._title_edit_btn,
+                        ft.Text("Название задачи", size=11, color=ft.Colors.GREY_600),
                     ],
                     vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                    spacing=0,
                 ),
                 self._title_container,
             ]
@@ -219,16 +219,15 @@ class ResultCard:
                 border_radius=8,
                 content=self._build_text_content(),
             )
-            desc_row_controls: list[ft.Control] = [
-                ft.Text("Описание задачи", size=11, color=ft.Colors.GREY_600),
-                ft.Container(expand=True),
-            ]
+            desc_row_controls: list[ft.Control] = []
             if not in_jira:
                 desc_row_controls.append(self._edit_btn)
+            desc_row_controls.append(ft.Text("Описание задачи", size=11, color=ft.Colors.GREY_600))
             controls += [
                 ft.Row(
                     controls=desc_row_controls,
                     vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                    spacing=0,
                 ),
                 self._text_container,
             ]
@@ -237,8 +236,6 @@ class ResultCard:
         controls += [
             ft.Row(
                 controls=[
-                    ft.Text("Параметры Jira", size=11, color=ft.Colors.GREY_600),
-                    ft.Container(expand=True),
                     ft.IconButton(
                         icon=ft.Icons.SYNC,
                         tooltip="Обновить параметры из настроек команды",
@@ -246,8 +243,10 @@ class ResultCard:
                         icon_size=18,
                         visible=not in_jira,
                     ),
+                    ft.Text("Параметры Jira", size=11, color=ft.Colors.GREY_600),
                 ],
                 vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                spacing=0,
             ),
             self._jira_params_row,
         ]
