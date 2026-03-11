@@ -443,9 +443,19 @@ class TeamEditor:
                 _add_field_row_container.content = _build_add_row()
                 self.page.update()
 
+            _is_epic = (task_type_dropdown.value or "").strip().lower() == "epic"
+            _available_fields = [
+                f for f in _jira_fields
+                if f["id"] not in _extra_fields
+                and not (_is_epic and (
+                    f["id"] == "customfield_15501"
+                    or f["name"].lower() in ("epic name", "epic-name", "название epic", "название эпика")
+                ))
+            ]
+
             key_dd = ft.Dropdown(
-                options=[ft.dropdown.Option(f["id"], f["name"]) for f in _jira_fields],
-                value=cur_fid,
+                options=[ft.dropdown.Option(f["id"], f["name"]) for f in _available_fields],
+                value=cur_fid if cur_fid not in _extra_fields else None,
                 hint_text="Выберите поле",
                 dense=True,
                 expand=2,
