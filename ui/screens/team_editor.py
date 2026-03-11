@@ -488,6 +488,7 @@ class TeamEditor:
                         width=90,
                         keyboard_type=ft.KeyboardType.NUMBER,
                         tooltip="Из URL Jira: ObjectSchema.jspa?id=…&typeId=XXXX",
+                        content_padding=ft.padding.only(left=10, top=16, right=10, bottom=16),
                     )
 
                     async def _do_fetch_insight(e: ft.ControlEvent) -> None:
@@ -677,6 +678,7 @@ class TeamEditor:
                     hint_text="Значение",
                     dense=True,
                     expand=3,
+                    content_padding=ft.padding.only(left=10, top=16, right=10, bottom=16),
                 )
 
                 def get_val() -> str:
