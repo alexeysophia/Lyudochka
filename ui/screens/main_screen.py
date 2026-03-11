@@ -55,6 +55,7 @@ class MainScreen:
         self._result_area: ft.Column | None = None
         self._mic_btn: ft.OutlinedButton | None = None
         self._skip_btn: ft.TextButton | None = None
+        self._skip_clarification_cb: ft.Checkbox | None = None
         self._recording_row: ft.Row | None = None
         self._processing_audio_row: ft.Row | None = None
 
@@ -205,6 +206,11 @@ class MainScreen:
             disabled=True,
         )
 
+        self._skip_clarification_cb = ft.Checkbox(
+            label="Пропустить уточняющие вопросы",
+            value=False,
+        )
+
         self._result_area = ft.Column(controls=[], spacing=16)
 
         self._mic_btn = ft.OutlinedButton(
@@ -261,7 +267,14 @@ class MainScreen:
                     spacing=8,
                 ),
                 ft.Divider(),
-                self._team_dropdown,
+                ft.Row(
+                    controls=[
+                        self._team_dropdown,
+                        self._skip_clarification_cb,
+                    ],
+                    vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                    spacing=16,
+                ),
                 self._user_input,
                 self._recording_row,
                 self._processing_audio_row,
@@ -289,12 +302,17 @@ class MainScreen:
             self._show_error("Введите описание задачи")
             return
 
+        if self._generate_btn is not None:
+            self._generate_btn.disabled = True
+            self._generate_btn.update()
+
         self._user_input_value = raw.strip()
         self._stage = "input"
         self._current_questions = []
         self._current_questions_form = None
         self._current_ai_response = None
-        await self._run_generation(self._user_input_value, None)
+        force = bool(self._skip_clarification_cb and self._skip_clarification_cb.value)
+        await self._run_generation(self._user_input_value, None, force)
 
     def _clone_draft_clicked(self, e: ft.ControlEvent) -> None:
         if not self._selected_team or self._current_ai_response is None:
@@ -483,6 +501,8 @@ class MainScreen:
             self._team_dropdown.visible = False
         if self._user_input is not None:
             self._user_input.visible = False
+        if self._skip_clarification_cb is not None:
+            self._skip_clarification_cb.visible = False
         if self._generate_btn is not None:
             self._generate_btn.visible = False
         if self._generate_row is not None:
@@ -514,6 +534,8 @@ class MainScreen:
         if self._user_input is not None:
             self._user_input.visible = True
             self._user_input.disabled = True
+        if self._skip_clarification_cb is not None:
+            self._skip_clarification_cb.visible = False
         if self._generate_btn is not None:
             self._generate_btn.visible = False
         if self._generate_row is not None:
@@ -537,6 +559,8 @@ class MainScreen:
         if self._user_input is not None:
             self._user_input.visible = True
             self._user_input.disabled = False
+        if self._skip_clarification_cb is not None:
+            self._skip_clarification_cb.visible = True
         if self._generate_btn is not None:
             self._generate_btn.visible = True
         if self._generate_row is not None:

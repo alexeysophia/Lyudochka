@@ -7,6 +7,7 @@ from core.jira_client import get_project_meta
 from data.models import Team
 from data.settings_store import load_settings
 from data.teams_store import delete_team, is_lead_taken, is_name_taken, save_team
+from ui.snack import error_snack
 
 _DIALOG_W = 560
 _DIALOG_CONTENT_H = 620  # fixed height; content scrolls inside
@@ -82,15 +83,11 @@ class TeamEditor:
         async def _do_fetch_meta() -> None:
             proj_key = (project_field.value or "").strip().upper()
             if not proj_key:
-                fetch_status.value = "Введите ключ проекта"
-                fetch_status.color = ft.Colors.RED_400
-                fetch_status.update()
+                error_snack(self.page, "Введите ключ проекта Jira")
                 return
             settings = load_settings()
             if not settings.jira_url or not settings.jira_token:
-                fetch_status.value = "Настройте подключение к Jira в Настройках"
-                fetch_status.color = ft.Colors.RED_400
-                fetch_status.update()
+                error_snack(self.page, "Настройте подключение к Jira в Настройках")
                 return
             fetch_btn.disabled = True
             fetch_loading.visible = True
@@ -101,9 +98,7 @@ class TeamEditor:
             try:
                 meta = await get_project_meta(settings.jira_url, settings.jira_token, proj_key)
             except Exception as exc:
-                fetch_status.value = f"Ошибка: {exc}"
-                fetch_status.color = ft.Colors.RED_400
-                fetch_status.update()
+                error_snack(self.page, str(exc))
                 return
             finally:
                 fetch_btn.disabled = False

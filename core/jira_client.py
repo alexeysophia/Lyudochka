@@ -94,8 +94,8 @@ async def get_project_meta(jira_url: str, token: str, project_key: str) -> dict:
         raise ValueError(f"Не удалось подключиться к Jira: {e}")
     if resp.status_code >= 400:
         raise ValueError(f"Jira {resp.status_code}: {resp.text}")
-        data = resp.json()
 
+    data = resp.json()
     projects = data.get("projects", [])
     if not projects:
         raise ValueError(f"Проект '{project_key}' не найден или нет доступа")
