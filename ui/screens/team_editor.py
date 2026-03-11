@@ -464,6 +464,7 @@ class TeamEditor:
                     dense=True,
                     expand=3,
                     disabled=True,
+                    content_padding=ft.padding.only(left=10, top=16, right=10, bottom=16),
                 )
 
                 def get_val() -> str:
