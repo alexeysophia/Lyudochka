@@ -241,7 +241,8 @@ async def get_insight_objects(jira_url: str, token: str, field_name: str) -> lis
     if resp.status_code >= 400:
         raise ValueError(f"Insight API {resp.status_code}: {resp.text[:300]}")
 
-    entries = resp.json().get("objectEntries", [])
+    raw = resp.json()
+    entries = raw.get("objectEntries", [])
     result: list[dict] = [
         {"id": obj.get("objectKey", ""), "name": obj.get("label", obj.get("objectKey", ""))}
         for obj in entries
@@ -255,4 +256,13 @@ async def get_insight_objects(jira_url: str, token: str, field_name: str) -> lis
         )
 
     log.debug("Insight: got %d objects for type '%s'", len(result), type_name)
+    # Log full detail to diagnose wrong-schema issues
+    for obj in entries[:50]:
+        obj_type = obj.get("objectType", {})
+        schema = obj_type.get("objectSchemaId", "?")
+        type_n = obj_type.get("name", "?")
+        log.debug(
+            "  Insight obj: key=%s label=%r schema=%s type=%s",
+            obj.get("objectKey"), obj.get("label"), schema, type_n,
+        )
     return result
