@@ -932,15 +932,15 @@ class TeamEditor:
                         task_type_dropdown,
                         ft.Row(
                             controls=[
+                                edit_rules_btn,
                                 ft.Text(
                                     "Правила команды",
                                     size=13,
                                     weight=ft.FontWeight.W_500,
                                 ),
-                                ft.Container(expand=True),
-                                edit_rules_btn,
                             ],
                             vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                            spacing=0,
                         ),
                         _rules_area,
                         context_field,
