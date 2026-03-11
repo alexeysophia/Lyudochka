@@ -563,6 +563,13 @@ class TeamEditor:
                     av for av in cur_fmeta["allowed_values"]
                     if av["id"] not in already_ids
                 ]
+                def on_add_multi_val(e: ft.ControlEvent) -> None:
+                    vid = e.control.value
+                    if vid and vid not in _add_row_state[0]["multi_ids"]:
+                        _add_row_state[0]["multi_ids"].append(vid)
+                        _add_field_row_container.content = _build_add_row()
+                        self.page.update()
+
                 pick_dd = ft.Dropdown(
                     options=[
                         ft.dropdown.Option(av["id"], av["name"])
@@ -570,26 +577,12 @@ class TeamEditor:
                     ],
                     hint_text="Добавить значение...",
                     dense=True,
-                    expand=True,
+                    expand=3,
+                    on_select=on_add_multi_val,
                 )
 
-                def on_add_multi_val(e: ft.ControlEvent) -> None:
-                    vid = pick_dd.value
-                    if vid and vid not in _add_row_state[0]["multi_ids"]:
-                        _add_row_state[0]["multi_ids"].append(vid)
-                        _add_field_row_container.content = _build_add_row()
-                        self.page.update()
-
                 picker_row = ft.Row(
-                    controls=[
-                        pick_dd,
-                        ft.IconButton(
-                            icon=ft.Icons.ADD_CIRCLE_OUTLINE,
-                            icon_size=20,
-                            tooltip="Добавить значение",
-                            on_click=on_add_multi_val,
-                        ),
-                    ],
+                    controls=[pick_dd],
                     vertical_alignment=ft.CrossAxisAlignment.CENTER,
                     spacing=4,
                 )
