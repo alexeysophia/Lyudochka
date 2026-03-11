@@ -465,7 +465,6 @@ class TeamEditor:
             )
 
             # --- Build value control based on field meta ---
-            chips_controls: list[ft.Control] = []
             is_insight = cur_fmeta is not None and cur_fmeta.get("insight", False)
             has_values = bool(cur_fmeta and cur_fmeta.get("allowed_values"))
 
@@ -556,86 +555,100 @@ class TeamEditor:
                     return ""
 
             elif is_insight or cur_fmeta["multi"]:
-                # Multi-select: dropdown picker + chips
-                already_ids = set(cur_multi_ids)
+                # Multi-select: expandable checkbox dropdown
+                selected_set = set(cur_multi_ids)
+                _ms_expanded = state.get("ms_expanded", False)
 
-                filtered_avs = [
-                    av for av in cur_fmeta["allowed_values"]
-                    if av["id"] not in already_ids
-                ]
-                pick_dd = ft.Dropdown(
-                    options=[
-                        ft.dropdown.Option(av["id"], av["name"])
-                        for av in filtered_avs
-                    ],
-                    hint_text="Добавить значение...",
-                    dense=True,
-                    expand=True,
+                def toggle_ms_expanded(e: ft.ControlEvent) -> None:
+                    _add_row_state[0]["ms_expanded"] = not _add_row_state[0].get("ms_expanded", False)
+                    _add_field_row_container.content = _build_add_row()
+                    self.page.update()
+
+                def toggle_item(vid: str) -> None:
+                    ids: list[str] = list(_add_row_state[0]["multi_ids"])
+                    if vid in ids:
+                        ids.remove(vid)
+                    else:
+                        ids.append(vid)
+                    _add_row_state[0]["multi_ids"] = ids
+                    _add_field_row_container.content = _build_add_row()
+                    self.page.update()
+
+                sel_count = len(cur_multi_ids)
+                sel_label = f"Выбрано: {sel_count}" if sel_count else "Выберите значения..."
+                ms_header = ft.Container(
+                    content=ft.Row(
+                        controls=[
+                            ft.Text(
+                                sel_label,
+                                expand=True,
+                                size=14,
+                                color=ft.Colors.ON_SURFACE if sel_count else ft.Colors.GREY_500,
+                            ),
+                            ft.Icon(
+                                ft.Icons.ARROW_DROP_UP if _ms_expanded else ft.Icons.ARROW_DROP_DOWN,
+                                size=20,
+                            ),
+                        ],
+                        spacing=4,
+                        vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                    ),
+                    border=ft.border.all(1, ft.Colors.OUTLINE),
+                    border_radius=ft.border_radius.only(
+                        top_left=4, top_right=4,
+                        bottom_left=0 if _ms_expanded else 4,
+                        bottom_right=0 if _ms_expanded else 4,
+                    ),
+                    padding=ft.padding.symmetric(horizontal=12, vertical=10),
+                    on_click=toggle_ms_expanded,
                 )
 
-                def on_add_multi_val(e: ft.ControlEvent) -> None:
-                    vid = pick_dd.value
-                    if vid and vid not in _add_row_state[0]["multi_ids"]:
-                        _add_row_state[0]["multi_ids"].append(vid)
-                        _add_field_row_container.content = _build_add_row()
-                        self.page.update()
+                ms_controls: list[ft.Control] = [ms_header]
+                if _ms_expanded:
+                    avs = cur_fmeta["allowed_values"]
+                    item_rows: list[ft.Control] = []
+                    for av in avs:
+                        def make_toggle(v: str = av["id"]) -> Callable:
+                            return lambda e: toggle_item(v)
+                        item_rows.append(
+                            ft.Container(
+                                content=ft.Row(
+                                    controls=[
+                                        ft.Checkbox(
+                                            value=av["id"] in selected_set,
+                                            data=av["id"],
+                                            on_change=lambda e: toggle_item(e.control.data),
+                                        ),
+                                        ft.Text(av["name"], size=13),
+                                    ],
+                                    spacing=4,
+                                    vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                                ),
+                                padding=ft.padding.symmetric(horizontal=8, vertical=2),
+                                on_click=make_toggle(),
+                            )
+                        )
+                    ms_controls.append(
+                        ft.Container(
+                            content=ft.Column(
+                                controls=item_rows,
+                                spacing=0,
+                                scroll=ft.ScrollMode.AUTO,
+                                height=min(200, max(36, len(avs) * 40)),
+                            ),
+                            border=ft.border.all(1, ft.Colors.OUTLINE),
+                            border_radius=ft.border_radius.only(bottom_left=4, bottom_right=4),
+                            bgcolor=ft.Colors.SURFACE_CONTAINER,
+                            padding=ft.padding.symmetric(vertical=4),
+                        )
+                    )
 
-                picker_row = ft.Row(
-                    controls=[
-                        pick_dd,
-                        ft.IconButton(
-                            icon=ft.Icons.ADD_CIRCLE_OUTLINE,
-                            icon_size=20,
-                            tooltip="Добавить значение",
-                            on_click=on_add_multi_val,
-                        ),
-                    ],
-                    vertical_alignment=ft.CrossAxisAlignment.CENTER,
-                    spacing=4,
-                )
                 val_ctrl = ft.Column(
-                    controls=[picker_row],
-                    spacing=4,
+                    controls=ms_controls,
+                    spacing=0,
                     expand=3,
                     horizontal_alignment=ft.CrossAxisAlignment.STRETCH,
                 )
-
-                for vid in cur_multi_ids:
-                    vname = next(
-                        (av["name"] for av in cur_fmeta["allowed_values"] if av["id"] == vid),
-                        vid,
-                    )
-
-                    def make_remove_chip(v: str = vid) -> Callable:
-                        def handler(e: ft.ControlEvent) -> None:
-                            _add_row_state[0]["multi_ids"] = [
-                                x for x in _add_row_state[0]["multi_ids"] if x != v
-                            ]
-                            _add_field_row_container.content = _build_add_row()
-                            self.page.update()
-                        return handler
-
-                    chips_controls.append(
-                        ft.Container(
-                            content=ft.Row(
-                                controls=[
-                                    ft.Text(vname, size=12),
-                                    ft.IconButton(
-                                        icon=ft.Icons.CLOSE,
-                                        icon_size=14,
-                                        on_click=make_remove_chip(),
-                                        style=ft.ButtonStyle(padding=ft.padding.all(0)),
-                                    ),
-                                ],
-                                spacing=2,
-                                tight=True,
-                                vertical_alignment=ft.CrossAxisAlignment.CENTER,
-                            ),
-                            bgcolor=ft.Colors.BLUE_100,
-                            border_radius=12,
-                            padding=ft.padding.symmetric(horizontal=8, vertical=2),
-                        )
-                    )
 
                 def get_val() -> str:
                     ids = _add_row_state[0]["multi_ids"]
@@ -738,15 +751,6 @@ class TeamEditor:
                 spacing=4,
             )
 
-            if chips_controls:
-                return ft.Column(
-                    controls=[
-                        main_row,
-                        ft.Row(controls=chips_controls, spacing=4, wrap=True),
-                    ],
-                    spacing=6,
-                    horizontal_alignment=ft.CrossAxisAlignment.STRETCH,
-                )
             return main_row
 
         _extra_fields_column = ft.Column(controls=_build_field_rows(), spacing=6)
