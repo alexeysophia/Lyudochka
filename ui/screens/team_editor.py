@@ -605,7 +605,6 @@ class TeamEditor:
                     ],
                     vertical_alignment=ft.CrossAxisAlignment.CENTER,
                     spacing=4,
-                    expand=True,
                 )
                 val_ctrl_controls: list[ft.Control] = []
                 if schema_filter_row is not None:

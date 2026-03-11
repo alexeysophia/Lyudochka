@@ -6,6 +6,7 @@ import flet as ft
 from core.jira_client import create_jira_issue
 from data.models import AIResponse
 from data.settings_store import load_settings
+from data.teams_store import load_all_teams
 from ui.snack import error_snack
 
 log = logging.getLogger(__name__)
@@ -25,12 +26,18 @@ class ResultCard:
         self.page = page
         self.response = response
         self._task_text = response.task_text
+        self._task_title = response.task_title
         self._labels: list[str] = list(response.jira_params.get("labels", []))
         self._edit_mode = False
         self._saved_sel: list[int] = [0, 0]
         self._text_container: ft.Container | None = None
         self._edit_field: ft.TextField | None = None
         self._edit_btn: ft.IconButton | None = None
+        self._title_container: ft.Container | None = None
+        self._title_edit_field: ft.TextField | None = None
+        self._title_edit_btn: ft.IconButton | None = None
+        self._title_edit_mode: bool = False
+        self._jira_params_row: ft.Row | None = None
         self._jira_btn: ft.ElevatedButton | None = None
         self._jira_action_row: ft.Row | None = None
         self._tags_row: ft.Row | None = None
@@ -167,20 +174,29 @@ class ResultCard:
             ft.Divider(),
         ]
 
-        if self.response.task_title:
+        if self._task_title:
+            self._title_edit_btn = ft.IconButton(
+                icon=ft.Icons.EDIT_OUTLINED,
+                tooltip="Редактировать название",
+                on_click=self._toggle_title_edit,
+                visible=not in_jira,
+            )
+            self._title_container = ft.Container(
+                padding=ft.padding.symmetric(vertical=8, horizontal=12),
+                bgcolor=ft.Colors.SURFACE_CONTAINER,
+                border_radius=8,
+                content=self._build_title_content(),
+            )
             controls += [
-                ft.Text("Название задачи", size=11, color=ft.Colors.GREY_600),
-                ft.Container(
-                    padding=ft.padding.symmetric(vertical=8, horizontal=12),
-                    bgcolor=ft.Colors.SURFACE_CONTAINER,
-                    border_radius=8,
-                    content=ft.Text(
-                        self.response.task_title,
-                        size=15,
-                        weight=ft.FontWeight.W_500,
-                        selectable=True,
-                    ),
+                ft.Row(
+                    controls=[
+                        ft.Text("Название задачи", size=11, color=ft.Colors.GREY_600),
+                        ft.Container(expand=True),
+                        self._title_edit_btn,
+                    ],
+                    vertical_alignment=ft.CrossAxisAlignment.CENTER,
                 ),
+                self._title_container,
             ]
 
         if self._task_text:
@@ -204,19 +220,24 @@ class ResultCard:
                 self._text_container,
             ]
 
-        jira_chips: list[ft.Control] = []
-        if jira.get("project"):
-            jira_chips.append(ft.Chip(label=ft.Text(f"Проект: {jira['project']}")))
-        if jira.get("type"):
-            jira_chips.append(ft.Chip(label=ft.Text(f"Тип: {jira['type']}")))
-        for field_key, field_val in (jira.get("extra_fields") or {}).items():
-            jira_chips.append(ft.Chip(label=ft.Text(f"{field_key}: {field_val}")))
-
-        if jira_chips:
-            controls += [
-                ft.Text("Параметры Jira", size=11, color=ft.Colors.GREY_600),
-                ft.Row(controls=jira_chips, wrap=True),
-            ]
+        self._jira_params_row = ft.Row(controls=self._build_jira_chips(), wrap=True)
+        controls += [
+            ft.Row(
+                controls=[
+                    ft.Text("Параметры Jira", size=11, color=ft.Colors.GREY_600),
+                    ft.Container(expand=True),
+                    ft.IconButton(
+                        icon=ft.Icons.SYNC,
+                        tooltip="Обновить параметры из настроек команды",
+                        on_click=self._refresh_jira_params,
+                        icon_size=18,
+                        visible=not in_jira,
+                    ),
+                ],
+                vertical_alignment=ft.CrossAxisAlignment.CENTER,
+            ),
+            self._jira_params_row,
+        ]
 
         self._new_label_field = ft.TextField(
             hint_text="Новый тег",
@@ -274,6 +295,80 @@ class ResultCard:
             border_radius=12,
             content=ft.Column(controls=controls, spacing=10),
         )
+
+    def _build_jira_chips(self) -> list[ft.Control]:
+        jira = self.response.jira_params
+        chips: list[ft.Control] = []
+        if jira.get("project"):
+            chips.append(ft.Chip(label=ft.Text(f"Проект: {jira['project']}")))
+        if jira.get("type"):
+            chips.append(ft.Chip(label=ft.Text(f"Тип: {jira['type']}")))
+        for field_key, field_val in (jira.get("extra_fields") or {}).items():
+            chips.append(ft.Chip(label=ft.Text(f"{field_key}: {field_val}")))
+        return chips if chips else [ft.Text("—", size=12, color=ft.Colors.GREY_400)]
+
+    def _refresh_jira_params(self, e: ft.ControlEvent) -> None:
+        if self._jira_params_row is None:
+            return
+        project_key = self.response.jira_params.get("project", "")
+        teams = load_all_teams()
+        team = next((t for t in teams if t.jira_project == project_key), None)
+        if team is None:
+            error_snack(self.page, f"Команда для проекта {project_key} не найдена")
+            return
+        # Merge team's extra_jira_fields into jira_params
+        current_extra: dict = dict(self.response.jira_params.get("extra_fields") or {})
+        current_extra.update(team.extra_jira_fields)
+        self.response.jira_params["extra_fields"] = current_extra
+        # Sync type_id if changed
+        if team.default_task_type_id:
+            self.response.jira_params["type_id"] = team.default_task_type_id
+        self._jira_params_row.controls = self._build_jira_chips()
+        self._jira_params_row.update()
+        snack = ft.SnackBar(content=ft.Text("Параметры Jira обновлены из настроек команды"), open=True)
+        self.page.overlay.append(snack)
+        self.page.update()
+
+    def _build_title_content(self) -> ft.Control:
+        if self._title_edit_mode:
+            self._title_edit_field = ft.TextField(
+                value=self._task_title,
+                border=ft.InputBorder.NONE,
+                expand=True,
+                text_size=15,
+                content_padding=ft.padding.all(0),
+            )
+            return self._title_edit_field
+        else:
+            self._title_edit_field = None
+            return ft.Text(
+                self._task_title,
+                size=15,
+                weight=ft.FontWeight.W_500,
+                selectable=True,
+            )
+
+    def _toggle_title_edit(self, e: ft.ControlEvent) -> None:
+        if self._title_edit_mode:
+            if self._title_edit_field is not None:
+                self._task_title = self._title_edit_field.value or self._task_title
+            self.response.task_title = self._task_title
+            self._title_edit_mode = False
+            if self._title_edit_btn:
+                self._title_edit_btn.icon = ft.Icons.EDIT_OUTLINED
+                self._title_edit_btn.tooltip = "Редактировать название"
+                self._title_edit_btn.update()
+        else:
+            self._title_edit_mode = True
+            if self._title_edit_btn:
+                self._title_edit_btn.icon = ft.Icons.CHECK
+                self._title_edit_btn.tooltip = "Сохранить название"
+                self._title_edit_btn.update()
+        if self._title_container is not None:
+            self._title_container.content = self._build_title_content()
+            self._title_container.update()
+        if self._title_edit_mode and self._title_edit_field is not None:
+            self.page.run_task(self._title_edit_field.focus)
 
     def _build_text_content(self) -> ft.Control:
         if self._edit_mode:
