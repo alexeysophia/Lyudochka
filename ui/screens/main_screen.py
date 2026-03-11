@@ -36,6 +36,7 @@ class MainScreen:
         self._current_questions_form: QuestionsForm | None = None
         self._current_ai_response: AIResponse | None = None
         self._last_submitted_answers: list[list[str]] = []
+        self._current_draft_id: str | None = None
 
         # Voice input state
         self._voice_stage: str = "idle"  # "idle" | "recording" | "processing_audio"
@@ -72,6 +73,7 @@ class MainScreen:
         self._current_questions = []
         self._current_questions_form = None
         self._current_ai_response = None
+        self._current_draft_id = None
         self._container = ft.Container(
             padding=30,
             content=self._build_content(),
@@ -89,6 +91,7 @@ class MainScreen:
         self._current_questions = []
         self._current_questions_form = None
         self._current_ai_response = None
+        self._current_draft_id = None
         if self._container is not None:
             self._container.content = self._build_content()
             self.page.update()
@@ -103,6 +106,7 @@ class MainScreen:
         self._current_questions = draft.questions
         self._current_questions_form = None
         self._current_ai_response = draft.ai_response
+        self._current_draft_id = draft.id
 
         if self._team_dropdown is not None:
             self._team_dropdown.value = draft.team_name
@@ -134,7 +138,7 @@ class MainScreen:
             self._set_ready_view()
             if self._result_area is not None:
                 self._result_area.controls = [
-                    ResultCard(self.page, draft.ai_response).build()
+                    ResultCard(self.page, draft.ai_response, on_jira_created=self._on_jira_created).build()
                 ]
 
     # ------------------------------------------------------------------
@@ -376,6 +380,7 @@ class MainScreen:
             ai_response=self._current_ai_response,
         )
         save_draft(draft)
+        self._current_draft_id = draft.id
         self._clear_error()
         msg = "Сохранено" if self._stage == "ready" else "Черновик сохранён"
         snack = ft.SnackBar(content=ft.Text(msg), open=True)
@@ -427,7 +432,7 @@ class MainScreen:
             self._stage = "ready"
             self._current_ai_response = response
             self._set_ready_view()
-            self._result_area.controls = [ResultCard(self.page, response).build()]
+            self._result_area.controls = [ResultCard(self.page, response, on_jira_created=self._on_jira_created).build()]
 
         elif response.status == "need_clarification":
             if not response.questions:
@@ -456,6 +461,30 @@ class MainScreen:
     # ------------------------------------------------------------------
     # UI state helpers
     # ------------------------------------------------------------------
+
+    def _on_jira_created(self, key: str) -> None:
+        """Called by ResultCard after a Jira issue is successfully created."""
+        if self._current_ai_response is None or self._selected_team is None:
+            return
+        draft_id = self._current_draft_id or str(uuid.uuid4())
+        draft = Draft(
+            id=draft_id,
+            created_at=datetime.now().isoformat(),
+            team_name=self._selected_team.name,
+            user_input=self._user_input_value,
+            stage="ready",
+            questions=self._current_questions,
+            answers=list(self._last_submitted_answers),
+            ai_response=self._current_ai_response,
+        )
+        save_draft(draft)
+        self._current_draft_id = draft_id
+        # Switch save button to "Клонировать"
+        if self._save_draft_btn is not None:
+            self._save_draft_btn.content = "Клонировать"
+            self._save_draft_btn.icon = ft.Icons.COPY_ALL
+            self._save_draft_btn.on_click = self._clone_draft_clicked
+            self._save_draft_btn.update()
 
     def _set_loading(self, loading: bool) -> None:
         if self._loading is not None:
@@ -648,7 +677,7 @@ class MainScreen:
             self._set_ready_view()
             if self._result_area is not None:
                 self._result_area.controls = [
-                    ResultCard(self.page, self._current_ai_response).build()
+                    ResultCard(self.page, self._current_ai_response, on_jira_created=self._on_jira_created).build()
                 ]
 
         self.page.update()

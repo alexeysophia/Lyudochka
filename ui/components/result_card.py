@@ -1,5 +1,6 @@
 import logging
 import subprocess
+from collections.abc import Callable
 
 import flet as ft
 
@@ -23,9 +24,15 @@ def _copy_to_clipboard(text: str) -> None:
 
 
 class ResultCard:
-    def __init__(self, page: ft.Page, response: AIResponse) -> None:
+    def __init__(
+        self,
+        page: ft.Page,
+        response: AIResponse,
+        on_jira_created: Callable[[str], None] | None = None,
+    ) -> None:
         self.page = page
         self.response = response
+        self._on_jira_created = on_jira_created
         self._task_text = response.task_text
         self._task_title = response.task_title
         self._labels: list[str] = list(response.jira_params.get("labels", []))
@@ -43,6 +50,8 @@ class ResultCard:
         self._jira_action_row: ft.Row | None = None
         self._tags_row: ft.Row | None = None
         self._new_label_field: ft.TextField | None = None
+        self._header_icon_ctrl: ft.Icon | None = None
+        self._header_text_ctrl: ft.Text | None = None
 
     # ------------------------------------------------------------------
     # Formatting helpers
@@ -153,16 +162,19 @@ class ResultCard:
         header_color = ft.Colors.TEAL_700 if in_jira else ft.Colors.GREEN
         header_text = "Задача в Jira" if in_jira else "Задача готова"
 
+        self._header_icon_ctrl = ft.Icon(header_icon, color=header_color)
+        self._header_text_ctrl = ft.Text(
+            header_text,
+            size=16,
+            weight=ft.FontWeight.BOLD,
+            color=header_color,
+        )
+
         controls: list[ft.Control] = [
             ft.Row(
                 controls=[
-                    ft.Icon(header_icon, color=header_color),
-                    ft.Text(
-                        header_text,
-                        size=16,
-                        weight=ft.FontWeight.BOLD,
-                        color=header_color,
-                    ),
+                    self._header_icon_ctrl,
+                    self._header_text_ctrl,
                     ft.Container(expand=True),
                     ft.IconButton(
                         icon=ft.Icons.COPY,
@@ -491,8 +503,21 @@ class ResultCard:
         self._jira_action_row.controls = [open_btn]
         self._jira_action_row.update()
 
+        # Update header to "Задача в Jira"
+        if self._header_icon_ctrl is not None:
+            self._header_icon_ctrl.name = ft.Icons.TASK_ALT
+            self._header_icon_ctrl.color = ft.Colors.TEAL_700
+            self._header_icon_ctrl.update()
+        if self._header_text_ctrl is not None:
+            self._header_text_ctrl.value = "Задача в Jira"
+            self._header_text_ctrl.color = ft.Colors.TEAL_700
+            self._header_text_ctrl.update()
+
         snack = ft.SnackBar(
             content=ft.Text(f"Задача {key} создана в Jira"), open=True
         )
         self.page.overlay.append(snack)
         self.page.update()
+
+        if self._on_jira_created is not None:
+            self._on_jira_created(key)
