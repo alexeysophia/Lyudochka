@@ -380,6 +380,8 @@ class TeamEditor:
                         _extra_fields.pop(k, None)
                         _extra_fields_column.controls = _build_field_rows()
                         _extra_fields_column.update()
+                        _add_field_row_container.content = _build_add_row()
+                        self.page.update()
                     return on_delete
                 label = _field_label(fk)
                 display = _display_value(fk, fv)
