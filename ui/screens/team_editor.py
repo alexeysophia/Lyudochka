@@ -512,16 +512,7 @@ class TeamEditor:
                             if idx is not None:
                                 _jira_fields[idx]["allowed_values"] = objects
                                 _jira_fields[idx]["multi"] = True
-                                if explicit_type_id is not None:
-                                    _jira_fields[idx]["insight_schemas"] = []
-                                else:
-                                    seen_schemas: list = []
-                                    for o in objects:
-                                        sid = o.get("schema_id")
-                                        if sid is not None and sid not in seen_schemas:
-                                            seen_schemas.append(sid)
-                                    _jira_fields[idx]["insight_schemas"] = seen_schemas if len(seen_schemas) > 1 else []
-                            _add_row_state[0] = {"field_id": cur_fid, "multi_ids": [], "loading": False, "schema_filter": None}
+                            _add_row_state[0] = {"field_id": cur_fid, "multi_ids": [], "loading": False}
                         except Exception as exc:
                             _add_row_state[0]["loading"] = False
                             error_snack(self.page, str(exc))
@@ -555,37 +546,10 @@ class TeamEditor:
             elif is_insight or cur_fmeta["multi"]:
                 # Multi-select: dropdown picker + chips
                 already_ids = set(cur_multi_ids)
-                cur_schema_filter = state.get("schema_filter")
-                insight_schemas: list = cur_fmeta.get("insight_schemas", [])
-
-                def on_schema_select(e: ft.ControlEvent) -> None:
-                    val = e.control.value
-                    _add_row_state[0]["schema_filter"] = int(val) if val else None
-                    _add_field_row_container.content = _build_add_row()
-                    self.page.update()
-
-                schema_filter_row: ft.Control | None = None
-                if insight_schemas:
-                    schema_filter_row = ft.Row(
-                        controls=[
-                            ft.Text("Схема:", size=12, color=ft.Colors.GREY_600),
-                            ft.Dropdown(
-                                options=[ft.dropdown.Option(str(sid), f"Схема {sid}") for sid in insight_schemas],
-                                value=str(cur_schema_filter) if cur_schema_filter is not None else None,
-                                hint_text="Все схемы",
-                                dense=True,
-                                expand=True,
-                                on_select=on_schema_select,
-                            ),
-                        ],
-                        vertical_alignment=ft.CrossAxisAlignment.CENTER,
-                        spacing=6,
-                    )
 
                 filtered_avs = [
                     av for av in cur_fmeta["allowed_values"]
                     if av["id"] not in already_ids
-                    and (cur_schema_filter is None or av.get("schema_id") == cur_schema_filter)
                 ]
                 pick_dd = ft.Dropdown(
                     options=[
@@ -617,12 +581,8 @@ class TeamEditor:
                     vertical_alignment=ft.CrossAxisAlignment.CENTER,
                     spacing=4,
                 )
-                val_ctrl_controls: list[ft.Control] = []
-                if schema_filter_row is not None:
-                    val_ctrl_controls.append(schema_filter_row)
-                val_ctrl_controls.append(picker_row)
                 val_ctrl = ft.Column(
-                    controls=val_ctrl_controls,
+                    controls=[picker_row],
                     spacing=4,
                     expand=3,
                     horizontal_alignment=ft.CrossAxisAlignment.STRETCH,
