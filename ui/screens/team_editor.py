@@ -349,16 +349,17 @@ class TeamEditor:
                 if isinstance(parsed, list):
                     names: list[str] = []
                     for item in parsed:
-                        if isinstance(item, dict) and "id" in item:
-                            vid = item["id"]
-                            if fmeta and fmeta.get("allowed_values"):
-                                name = next(
-                                    (av["name"] for av in fmeta["allowed_values"] if av["id"] == vid),
-                                    vid,
-                                )
-                            else:
-                                name = vid
-                            names.append(name)
+                        if isinstance(item, dict):
+                            vid = item.get("id") or item.get("key")
+                            if vid:
+                                if fmeta and fmeta.get("allowed_values"):
+                                    name = next(
+                                        (av["name"] for av in fmeta["allowed_values"] if av["id"] == vid),
+                                        vid,
+                                    )
+                                else:
+                                    name = vid
+                                names.append(name)
                     return ", ".join(names) if names else raw
                 elif isinstance(parsed, dict) and "id" in parsed:
                     vid = parsed["id"]

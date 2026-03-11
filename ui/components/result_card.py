@@ -1,3 +1,4 @@
+import json
 import logging
 import subprocess
 from collections.abc import Callable
@@ -308,6 +309,44 @@ class ResultCard:
             content=ft.Column(controls=controls, spacing=10),
         )
 
+    @staticmethod
+    def _resolve_field_value(raw: str, jira_fields_meta: list[dict]) -> str:
+        """Convert stored Jira field JSON value to human-readable string."""
+        try:
+            parsed = json.loads(raw)
+            if isinstance(parsed, list):
+                names: list[str] = []
+                for item in parsed:
+                    if isinstance(item, dict):
+                        vid = item.get("id") or item.get("key")
+                        if vid:
+                            name = next(
+                                (
+                                    av["name"]
+                                    for f in jira_fields_meta
+                                    for av in (f.get("allowed_values") or [])
+                                    if av["id"] == vid
+                                ),
+                                vid,
+                            )
+                            names.append(name)
+                return ", ".join(names) if names else raw
+            if isinstance(parsed, dict):
+                vid = parsed.get("id") or parsed.get("key")
+                if vid:
+                    return next(
+                        (
+                            av["name"]
+                            for f in jira_fields_meta
+                            for av in (f.get("allowed_values") or [])
+                            if av["id"] == vid
+                        ),
+                        vid,
+                    )
+        except (json.JSONDecodeError, TypeError):
+            pass
+        return raw
+
     def _build_jira_chips(self) -> list[ft.Control]:
         jira = self.response.jira_params
         chips: list[ft.Control] = []
@@ -315,8 +354,20 @@ class ResultCard:
             chips.append(ft.Chip(label=ft.Text(f"Проект: {jira['project']}")))
         if jira.get("type"):
             chips.append(ft.Chip(label=ft.Text(f"Тип: {jira['type']}")))
-        for field_key, field_val in (jira.get("extra_fields") or {}).items():
-            chips.append(ft.Chip(label=ft.Text(f"{field_key}: {field_val}")))
+        extra = jira.get("extra_fields") or {}
+        if extra:
+            # Load field metadata from the team to resolve human-readable names
+            project_key = jira.get("project", "")
+            teams = load_all_teams()
+            team = next((t for t in teams if t.jira_project == project_key), None)
+            fields_meta: list[dict] = team.jira_fields_meta if team else []
+            for field_key, field_val in extra.items():
+                field_label = next(
+                    (f["name"] for f in fields_meta if f["id"] == field_key),
+                    field_key,
+                )
+                display_val = self._resolve_field_value(field_val, fields_meta)
+                chips.append(ft.Chip(label=ft.Text(f"{field_label}: {display_val}")))
         return chips if chips else [ft.Text("—", size=12, color=ft.Colors.GREY_400)]
 
     def _refresh_jira_params(self, e: ft.ControlEvent) -> None:
