@@ -11,6 +11,8 @@ class Team:
     context: str = ""       # Team context: products, responsibilities
     extra_jira_fields: dict = field(default_factory=dict)  # Custom Jira fields, e.g. {"customfield_123": "value"}
     default_task_type_id: str = ""  # Numeric Jira issue type ID (e.g. "10003"); used instead of name if set
+    jira_fields_meta: list = field(default_factory=list)   # [{id, name, multi, allowed_values}] from createmeta
+    jira_issue_types_meta: list = field(default_factory=list)  # [{id, name}] from createmeta
 
 
 @dataclass

@@ -1,6 +1,7 @@
 import json
 import logging
 import re
+import urllib.parse
 from typing import Any
 
 import httpx
@@ -75,7 +76,10 @@ _SKIP_FIELD_IDS = {
 
 async def get_project_meta(jira_url: str, token: str, project_key: str) -> dict:
     """Fetch issue types and available fields for a Jira project via createmeta.
-    Returns {"issue_types": [{"id", "name"}], "fields": [{"id", "name"}]}.
+    Returns {
+        "issue_types": [{"id", "name"}],
+        "fields": [{"id", "name", "multi", "allowed_values": [{"id", "name"}]}]
+    }.
     """
     headers = {"Authorization": f"Bearer {token}", "Accept": "application/json"}
     base = jira_url.rstrip("/")
@@ -111,10 +115,29 @@ async def get_project_meta(jira_url: str, token: str, project_key: str) -> dict:
             if fid in seen or fid in _SKIP_FIELD_IDS or fid.startswith("__"):
                 continue
             seen.add(fid)
-            fields.append({"id": fid, "name": fmeta.get("name", fid)})
+            schema = fmeta.get("schema", {})
+            multi = schema.get("type") == "array"
+            is_insight = "insight" in schema.get("custom", "").lower()
+            raw_av = fmeta.get("allowedValues", [])
+            allowed_values = [
+                {"id": str(av.get("id", "")), "name": av.get("name") or av.get("value") or str(av.get("id", ""))}
+                for av in raw_av
+                if av.get("id") is not None
+            ]
+            fields.append({
+                "id": fid,
+                "name": fmeta.get("name", fid),
+                "multi": multi,
+                "allowed_values": allowed_values,
+                "insight": is_insight,
+            })
 
     fields.sort(key=lambda f: f["name"])
-    log.debug("Project %s: %d issue types, %d fields", project_key, len(issue_types), len(fields))
+    insight_count = sum(1 for f in fields if f["insight"])
+    log.debug(
+        "Project %s: %d issue types, %d fields (%d insight)",
+        project_key, len(issue_types), len(fields), insight_count,
+    )
     return {"issue_types": issue_types, "fields": fields}
 
 
@@ -187,3 +210,49 @@ async def create_jira_issue(
     key: str = data["key"]
     log.info("Jira issue created: %s", key)
     return key
+
+
+async def get_insight_objects(jira_url: str, token: str, field_name: str) -> list[dict]:
+    """Fetch Insight/Assets objects for a field using IQL search by object type name.
+
+    Derives the Insight object type name from the field display name
+    (strips parenthetical suffix, e.g. "Бизнес-сегмент (справочник)" → "Бизнес-сегмент").
+    Returns [{"id": objectKey, "name": label}].
+    """
+    type_name = re.sub(r"\s*\(.*?\)\s*$", "", field_name).strip()
+    iql = f'objectType = "{type_name}"'
+    url = (
+        f"{jira_url.rstrip('/')}/rest/insight/1.0/iql/objects"
+        f"?iql={urllib.parse.quote(iql)}&maxResults=200&includeAttributes=false"
+    )
+    headers = {"Authorization": f"Bearer {token}", "Accept": "application/json"}
+
+    log.debug("Insight IQL request: %s", url)
+    try:
+        async with httpx.AsyncClient(verify=False, timeout=30.0) as client:
+            resp = await client.get(url, headers=headers)
+    except httpx.ConnectTimeout:
+        raise ValueError("Сервер Jira недоступен: превышено время подключения")
+    except httpx.TimeoutException:
+        raise ValueError("Сервер Jira не ответил вовремя (таймаут)")
+    except httpx.ConnectError as e:
+        raise ValueError(f"Не удалось подключиться к Jira: {e}")
+
+    if resp.status_code >= 400:
+        raise ValueError(f"Insight API {resp.status_code}: {resp.text[:300]}")
+
+    entries = resp.json().get("objectEntries", [])
+    result: list[dict] = [
+        {"id": obj.get("objectKey", ""), "name": obj.get("label", obj.get("objectKey", ""))}
+        for obj in entries
+        if obj.get("objectKey")
+    ]
+
+    if not result:
+        raise ValueError(
+            f"Insight: объекты типа «{type_name}» не найдены.\n"
+            "Возможно, имя типа объекта в Insight не совпадает с названием поля."
+        )
+
+    log.debug("Insight: got %d objects for type '%s'", len(result), type_name)
+    return result

@@ -1,9 +1,10 @@
 import asyncio
+import json
 from typing import Callable
 
 import flet as ft
 
-from core.jira_client import get_project_meta
+from core.jira_client import get_insight_objects, get_project_meta
 from data.models import Team
 from data.settings_store import load_settings
 from data.teams_store import delete_team, is_lead_taken, is_name_taken, save_team
@@ -53,32 +54,53 @@ class TeamEditor:
             content_padding=_field_padding,
         )
 
-        # --- Jira meta state (loaded on demand) ---
-        _jira_issue_types: list[dict] = []  # [{id, name}]
-        _jira_fields: list[dict] = []  # {id, name}
-        # Map type name → numeric Jira ID; pre-seed from existing team data
+        # --- Jira meta state (loaded on demand or pre-populated from saved team) ---
+        _jira_issue_types: list[dict] = []
+        _jira_fields: list[dict] = []
         _type_id_map: dict[str, str] = {}
         if self.team and self.team.default_task_type_id:
             _type_id_map[self.team.default_task_type] = self.team.default_task_type_id
 
-        fetch_btn = ft.ElevatedButton("Получить поля из Jira", icon=ft.Icons.CLOUD_DOWNLOAD_OUTLINED, expand=True)
+        # Pre-populate from saved meta so user can work without re-fetching
+        if self.team and self.team.jira_issue_types_meta:
+            _jira_issue_types.extend(self.team.jira_issue_types_meta)
+            for t in _jira_issue_types:
+                _type_id_map[t["name"]] = t["id"]
+        if self.team and self.team.jira_fields_meta:
+            _jira_fields.extend(self.team.jira_fields_meta)
+
+        has_meta = bool(_jira_fields)
+
+        fetch_btn = ft.ElevatedButton(
+            "Обновить поля из Jira" if has_meta else "Получить поля из Jira",
+            icon=ft.Icons.CLOUD_SYNC if has_meta else ft.Icons.CLOUD_DOWNLOAD_OUTLINED,
+            expand=True,
+        )
         fetch_loading = ft.ProgressRing(visible=False, width=16, height=16, stroke_width=2)
         fetch_status = ft.Text("", size=11, color=ft.Colors.GREY_600, expand=True)
 
-        # --- Task type (only types fetched from Jira are allowed) ---
+        # --- Task type ---
         _current_type = self.team.default_task_type if self.team else ""
-        # Pre-populate with saved type so user can re-save without re-fetching
-        _initial_opts = (
-            [ft.dropdown.Option(_current_type)] if _current_type else []
+        _initial_type_opts = (
+            [ft.dropdown.Option(_current_type)] if _current_type and not _jira_issue_types else []
         )
         task_type_dropdown = ft.Dropdown(
             label="Тип задачи",
             value=_current_type or None,
             hint_text="Получите типы из Jira ↑",
             expand=True,
-            options=_initial_opts,
-            disabled=True,  # enabled after fetch
+            options=(
+                [ft.dropdown.Option(t["name"]) for t in _jira_issue_types]
+                if _jira_issue_types else _initial_type_opts
+            ),
+            disabled=not bool(_jira_issue_types),
         )
+
+        # --- Add-row state (tracks selected field + accumulated multi-values) ---
+        _add_row_state: list[dict] = [{"field_id": None, "multi_ids": []}]
+
+        # Forward declaration — assigned below after _build_add_row is defined
+        _add_field_row_container: ft.Container
 
         async def _do_fetch_meta() -> None:
             proj_key = (project_field.value or "").strip().upper()
@@ -110,26 +132,28 @@ class TeamEditor:
             _jira_issue_types.extend(meta["issue_types"])
             _jira_fields.clear()
             _jira_fields.extend(meta["fields"])
-            # Populate type name → ID map
             for t in _jira_issue_types:
                 _type_id_map[t["name"]] = t["id"]
 
-            # Update issue type dropdown and enable it
+            # Update issue type dropdown
             current_val = task_type_dropdown.value
             type_names = [t["name"] for t in _jira_issue_types]
             task_type_dropdown.options = [ft.dropdown.Option(t["name"]) for t in _jira_issue_types]
             task_type_dropdown.disabled = False
-            if current_val in type_names:
-                task_type_dropdown.value = current_val
-            else:
-                task_type_dropdown.value = None
+            task_type_dropdown.value = current_val if current_val in type_names else None
             task_type_dropdown.update()
 
-            # Rebuild extra-fields add-row and existing rows
+            # Rebuild add-row (now has field meta with allowed_values)
+            _add_row_state[0] = {"field_id": None, "multi_ids": []}
             _add_field_row_container.content = _build_add_row()
-            _add_field_row_container.update()
+            self.page.update()
             _extra_fields_column.controls = _build_field_rows()
             _extra_fields_column.update()
+
+            # Update button to "Обновить"
+            fetch_btn.content = "Обновить поля из Jira"
+            fetch_btn.icon = ft.Icons.CLOUD_SYNC
+            fetch_btn.update()
 
             fetch_status.value = f"Получено: {len(_jira_issue_types)} типов, {len(_jira_fields)} полей"
             fetch_status.color = ft.Colors.GREEN_700
@@ -150,12 +174,9 @@ class TeamEditor:
 
         # --- Rules state ---
         _rules_text: list[str] = [self.team.rules if self.team else ""]
-        # Start in edit mode if no rules yet, otherwise show rendered view
         _rules_edit_mode: list[bool] = [not bool(_rules_text[0])]
         _saved_sel: list[int] = [0, 0]
         _rules_field: list[ft.TextField | None] = [None]
-
-        # --- Formatting helpers ---
 
         def on_selection_change(e: ft.TextSelectionChangeEvent) -> None:
             if e.selection.base_offset is not None:
@@ -183,8 +204,6 @@ class TeamEditor:
             )
             field.update()
             self.page.run_task(field.focus)
-
-        # --- Formatting toolbar (shown only in edit mode) ---
 
         formatting_toolbar = ft.Row(
             controls=[
@@ -237,8 +256,6 @@ class TeamEditor:
             vertical_alignment=ft.CrossAxisAlignment.CENTER,
         )
 
-        # --- Rules area builders ---
-
         def _build_rules_edit_content() -> ft.Control:
             field = ft.TextField(
                 value=_rules_text[0],
@@ -290,8 +307,6 @@ class TeamEditor:
             ),
         )
 
-        # --- Edit / Save button ---
-
         edit_rules_btn = ft.IconButton(
             icon=ft.Icons.EDIT_OUTLINED if not _rules_edit_mode[0] else ft.Icons.CHECK,
             tooltip="Редактировать" if not _rules_edit_mode[0] else "Сохранить изменения",
@@ -326,21 +341,53 @@ class TeamEditor:
                     return f["name"]
             return fid
 
+        def _display_value(fid: str, raw: str) -> str:
+            """Convert stored JSON value back to human-readable string."""
+            fmeta = next((f for f in _jira_fields if f["id"] == fid), None)
+            try:
+                parsed = json.loads(raw)
+                if isinstance(parsed, list):
+                    names: list[str] = []
+                    for item in parsed:
+                        if isinstance(item, dict) and "id" in item:
+                            vid = item["id"]
+                            if fmeta and fmeta.get("allowed_values"):
+                                name = next(
+                                    (av["name"] for av in fmeta["allowed_values"] if av["id"] == vid),
+                                    vid,
+                                )
+                            else:
+                                name = vid
+                            names.append(name)
+                    return ", ".join(names) if names else raw
+                elif isinstance(parsed, dict) and "id" in parsed:
+                    vid = parsed["id"]
+                    if fmeta and fmeta.get("allowed_values"):
+                        return next(
+                            (av["name"] for av in fmeta["allowed_values"] if av["id"] == vid),
+                            vid,
+                        )
+                    return vid
+            except (json.JSONDecodeError, TypeError):
+                pass
+            return raw
+
         def _build_field_rows() -> list[ft.Control]:
             rows: list[ft.Control] = []
             for fk, fv in list(_extra_fields.items()):
-                def make_delete(k: str = fk) -> None:
+                def make_delete(k: str = fk) -> ft.ControlEvent:
                     def on_delete(e: ft.ControlEvent) -> None:
                         _extra_fields.pop(k, None)
                         _extra_fields_column.controls = _build_field_rows()
                         _extra_fields_column.update()
                     return on_delete
                 label = _field_label(fk)
+                display = _display_value(fk, fv)
                 rows.append(
                     ft.Row(
                         controls=[
                             ft.Text(label, size=13, weight=ft.FontWeight.W_500, expand=1),
-                            ft.Text(fv, size=13, color=ft.Colors.GREY_700, expand=2),
+                            ft.Text(display, size=13, color=ft.Colors.GREY_700, expand=2),
                             ft.IconButton(
                                 icon=ft.Icons.DELETE_OUTLINE,
                                 icon_size=18,
@@ -355,54 +402,258 @@ class TeamEditor:
                 )
             return rows
 
-        _extra_fields_column = ft.Column(controls=_build_field_rows(), spacing=6)
-
-        def _build_add_row() -> ft.Row:
+        def _build_add_row() -> ft.Control:
             meta_loaded = bool(_jira_fields)
-            if meta_loaded:
-                key_ctrl: ft.Control = ft.Dropdown(
-                    options=[ft.dropdown.Option(f["id"], f["name"]) for f in _jira_fields],
-                    hint_text="Выберите поле",
-                    dense=True,
-                    expand=2,
+            if not meta_loaded:
+                return ft.Row(
+                    controls=[
+                        ft.TextField(
+                            hint_text="Сначала получите поля из Jira ↑",
+                            dense=True,
+                            expand=2,
+                            disabled=True,
+                        ),
+                        ft.TextField(hint_text="Значение", dense=True, expand=3, disabled=True),
+                        ft.IconButton(icon=ft.Icons.ADD, tooltip="Добавить поле", disabled=True),
+                    ],
+                    vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                    spacing=4,
                 )
-            else:
-                key_ctrl = ft.TextField(
-                    hint_text="Сначала получите поля из Jira ↑",
-                    dense=True,
-                    expand=2,
-                    disabled=True,
-                )
-            val_field = ft.TextField(
-                hint_text="Значение", dense=True, expand=3, disabled=not meta_loaded,
+
+            state = _add_row_state[0]
+            cur_fid: str | None = state.get("field_id")
+            cur_multi_ids: list[str] = list(state.get("multi_ids", []))
+            is_loading: bool = state.get("loading", False)
+            cur_fmeta: dict | None = (
+                next((f for f in _jira_fields if f["id"] == cur_fid), None)
+                if cur_fid else None
             )
 
+            def on_field_select(e: ft.ControlEvent) -> None:
+                _add_row_state[0] = {"field_id": e.control.value, "multi_ids": [], "loading": False}
+                _add_field_row_container.content = _build_add_row()
+                self.page.update()
+
+            key_dd = ft.Dropdown(
+                options=[ft.dropdown.Option(f["id"], f["name"]) for f in _jira_fields],
+                value=cur_fid,
+                hint_text="Выберите поле",
+                dense=True,
+                expand=2,
+                on_select=on_field_select,
+            )
+
+            # --- Build value control based on field meta ---
+            chips_controls: list[ft.Control] = []
+            is_insight = cur_fmeta is not None and cur_fmeta.get("insight", False)
+            has_values = bool(cur_fmeta and cur_fmeta.get("allowed_values"))
+
+            if cur_fmeta is None:
+                # No field selected — free text placeholder
+                val_ctrl: ft.Control = ft.TextField(
+                    hint_text="Значение",
+                    dense=True,
+                    expand=3,
+                    disabled=True,
+                )
+
+                def get_val() -> str:
+                    return ""
+
+            elif is_insight and not has_values:
+                # Insight field without loaded values — show fetch button
+                if is_loading:
+                    val_ctrl = ft.Row(
+                        controls=[
+                            ft.ProgressRing(width=18, height=18, stroke_width=2),
+                            ft.Text("Загрузка значений...", size=13, color=ft.Colors.GREY_600),
+                        ],
+                        vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                        spacing=8,
+                        expand=3,
+                    )
+                else:
+                    async def _do_fetch_insight(e: ft.ControlEvent) -> None:
+                        _add_row_state[0]["loading"] = True
+                        _add_field_row_container.content = _build_add_row()
+                        self.page.update()
+                        try:
+                            settings = load_settings()
+                            if not settings.jira_url or not settings.jira_token:
+                                raise ValueError("Настройте подключение к Jira в Настройках")
+                            objects = await get_insight_objects(
+                                settings.jira_url, settings.jira_token, cur_fmeta["name"]
+                            )
+                            # Store fetched values into _jira_fields for this field
+                            idx = next((i for i, f in enumerate(_jira_fields) if f["id"] == cur_fid), None)
+                            if idx is not None:
+                                _jira_fields[idx]["allowed_values"] = objects
+                                _jira_fields[idx]["multi"] = True
+                            _add_row_state[0] = {"field_id": cur_fid, "multi_ids": [], "loading": False}
+                        except Exception as exc:
+                            _add_row_state[0]["loading"] = False
+                            error_snack(self.page, str(exc))
+                        _add_field_row_container.content = _build_add_row()
+                        self.page.update()
+
+                    val_ctrl = ft.ElevatedButton(
+                        "Получить значения",
+                        icon=ft.Icons.CLOUD_DOWNLOAD_OUTLINED,
+                        on_click=lambda e: self.page.run_task(_do_fetch_insight, e),
+                        expand=3,
+                    )
+
+                def get_val() -> str:
+                    return ""
+
+            elif is_insight or cur_fmeta["multi"]:
+                # Multi-select: dropdown picker + chips
+                already_ids = set(cur_multi_ids)
+                pick_dd = ft.Dropdown(
+                    options=[
+                        ft.dropdown.Option(av["id"], av["name"])
+                        for av in cur_fmeta["allowed_values"]
+                        if av["id"] not in already_ids
+                    ],
+                    hint_text="Добавить значение...",
+                    dense=True,
+                    expand=True,
+                )
+
+                def on_add_multi_val(e: ft.ControlEvent) -> None:
+                    vid = pick_dd.value
+                    if vid and vid not in _add_row_state[0]["multi_ids"]:
+                        _add_row_state[0]["multi_ids"].append(vid)
+                        _add_field_row_container.content = _build_add_row()
+                        self.page.update()
+
+                val_ctrl = ft.Row(
+                    controls=[
+                        pick_dd,
+                        ft.IconButton(
+                            icon=ft.Icons.ADD_CIRCLE_OUTLINE,
+                            icon_size=20,
+                            tooltip="Добавить значение",
+                            on_click=on_add_multi_val,
+                        ),
+                    ],
+                    vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                    spacing=4,
+                    expand=3,
+                )
+
+                for vid in cur_multi_ids:
+                    vname = next(
+                        (av["name"] for av in cur_fmeta["allowed_values"] if av["id"] == vid),
+                        vid,
+                    )
+
+                    def make_remove_chip(v: str = vid) -> Callable:
+                        def handler(e: ft.ControlEvent) -> None:
+                            _add_row_state[0]["multi_ids"] = [
+                                x for x in _add_row_state[0]["multi_ids"] if x != v
+                            ]
+                            _add_field_row_container.content = _build_add_row()
+                            self.page.update()
+                        return handler
+
+                    chips_controls.append(
+                        ft.Container(
+                            content=ft.Row(
+                                controls=[
+                                    ft.Text(vname, size=12),
+                                    ft.IconButton(
+                                        icon=ft.Icons.CLOSE,
+                                        icon_size=14,
+                                        on_click=make_remove_chip(),
+                                        style=ft.ButtonStyle(padding=ft.padding.all(0)),
+                                    ),
+                                ],
+                                spacing=2,
+                                tight=True,
+                                vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                            ),
+                            bgcolor=ft.Colors.BLUE_100,
+                            border_radius=12,
+                            padding=ft.padding.symmetric(horizontal=8, vertical=2),
+                        )
+                    )
+
+                def get_val() -> str:
+                    ids = _add_row_state[0]["multi_ids"]
+                    if not ids:
+                        return ""
+                    if is_insight:
+                        return json.dumps([{"key": iid} for iid in ids])
+                    return json.dumps([{"id": iid} for iid in ids])
+
+            elif not has_values:
+                # Non-insight field without allowed_values — free text
+                val_ctrl = ft.TextField(
+                    hint_text="Значение",
+                    dense=True,
+                    expand=3,
+                )
+
+                def get_val() -> str:
+                    return (val_ctrl.value or "").strip()  # type: ignore[union-attr]
+
+            else:
+                # Single select from allowed values
+                val_ctrl = ft.Dropdown(
+                    options=[
+                        ft.dropdown.Option(av["id"], av["name"])
+                        for av in cur_fmeta["allowed_values"]
+                    ],
+                    hint_text="Выберите значение...",
+                    dense=True,
+                    expand=3,
+                )
+
+                def get_val() -> str:
+                    vid = val_ctrl.value  # type: ignore[union-attr]
+                    if not vid:
+                        return ""
+                    return json.dumps({"id": vid})
+
             def do_add(e: ft.ControlEvent) -> None:
-                k = (key_ctrl.value or "").strip()
-                v = (val_field.value or "").strip()
-                if k:
+                k = (key_dd.value or "").strip()
+                v = get_val()
+                if k and v:
                     _extra_fields[k] = v
+                    _add_row_state[0] = {"field_id": None, "multi_ids": [], "loading": False}
                     _extra_fields_column.controls = _build_field_rows()
                     _extra_fields_column.update()
                     _add_field_row_container.content = _build_add_row()
-                    _add_field_row_container.update()
+                    self.page.update()
 
-            val_field.on_submit = do_add
-            return ft.Row(
+            main_row = ft.Row(
                 controls=[
-                    key_ctrl,
-                    val_field,
+                    key_dd,
+                    val_ctrl,
                     ft.IconButton(
                         icon=ft.Icons.ADD,
                         tooltip="Добавить поле",
                         on_click=do_add,
-                        disabled=not meta_loaded,
+                        disabled=is_loading,
                     ),
                 ],
                 vertical_alignment=ft.CrossAxisAlignment.CENTER,
                 spacing=4,
             )
 
+            if chips_controls:
+                return ft.Column(
+                    controls=[
+                        main_row,
+                        ft.Row(controls=chips_controls, spacing=4, wrap=True),
+                    ],
+                    spacing=6,
+                    horizontal_alignment=ft.CrossAxisAlignment.STRETCH,
+                )
+            return main_row
+
+        _extra_fields_column = ft.Column(controls=_build_field_rows(), spacing=6)
         _add_field_row_container = ft.Container(content=_build_add_row())
 
         extra_jira_section = ft.Column(
@@ -416,8 +667,7 @@ class TeamEditor:
 
         error_text = ft.Text("", color=ft.Colors.RED_400)
 
-        # Keyboard shortcuts: Ctrl+B/I/U → format; Shift+End → smart select
-        # Only active in edit mode
+        # Keyboard shortcuts
         prev_keyboard_handler = self.page.on_keyboard_event
 
         def on_keyboard(e: ft.KeyboardEvent) -> None:
@@ -511,6 +761,8 @@ class TeamEditor:
                 team_lead=new_lead,
                 context=context_field.value or "",
                 extra_jira_fields=dict(_extra_fields),
+                jira_fields_meta=list(_jira_fields),
+                jira_issue_types_meta=list(_jira_issue_types),
             )
             save_team(new_team)
             _restore_keyboard()
