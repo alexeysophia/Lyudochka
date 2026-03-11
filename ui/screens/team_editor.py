@@ -400,6 +400,15 @@ class TeamEditor:
                         spacing=4,
                     )
                 )
+            if not rows:
+                rows = [
+                    ft.Text(
+                        "Дополнительных полей Jira нет",
+                        size=12,
+                        color=ft.Colors.GREY_500,
+                        italic=True,
+                    )
+                ]
             return rows
 
         def _build_add_row() -> ft.Control:
@@ -734,8 +743,10 @@ class TeamEditor:
         extra_jira_section = ft.Column(
             controls=[
                 ft.Text("Дополнительные поля Jira", size=13, weight=ft.FontWeight.W_500),
-                _extra_fields_column,
                 _add_field_row_container,
+                ft.Divider(height=1),
+                _extra_fields_column,
+                ft.Divider(height=1),
             ],
             spacing=6,
         )
