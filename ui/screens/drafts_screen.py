@@ -25,9 +25,11 @@ class DraftsScreen:
         self._all_drafts: list[Draft] = []
         self._drafts_list_column: ft.Column | None = None
         self._filter_value: str = "Все команды"
+        self._stage_filter: str = "Все статусы"
 
     def build(self) -> ft.Control:
         self._filter_value = "Все команды"
+        self._stage_filter = "Все статусы"
         self._container = ft.Container(
             padding=30,
             content=self._build_content(),
@@ -50,12 +52,25 @@ class DraftsScreen:
             on_select=self._on_filter_change,
         )
 
+        stage_options = [ft.dropdown.Option("Все статусы")] + [
+            ft.dropdown.Option(key, label)
+            for key, (label, _) in _STAGE_LABELS.items()
+        ] + [ft.dropdown.Option("jira", "В Jira")]
+        stage_dropdown = ft.Dropdown(
+            options=stage_options,
+            value=self._stage_filter,
+            width=170,
+            content_padding=ft.padding.symmetric(horizontal=10, vertical=6),
+            on_select=self._on_stage_filter_change,
+        )
+
         header = ft.Column(
             controls=[
                 ft.Row(
                     controls=[
                         ft.Text("Сохраненные задачи", size=24, weight=ft.FontWeight.BOLD),
                         ft.Container(expand=True),
+                        stage_dropdown,
                         filter_dropdown,
                     ],
                     vertical_alignment=ft.CrossAxisAlignment.CENTER,
@@ -111,15 +126,33 @@ class DraftsScreen:
         )
 
     def _filtered_drafts(self) -> list[Draft]:
-        if self._filter_value == "Все команды":
-            return self._all_drafts
-        return [d for d in self._all_drafts if d.team_name == self._filter_value]
+        result = self._all_drafts
+        if self._filter_value != "Все команды":
+            result = [d for d in result if d.team_name == self._filter_value]
+        if self._stage_filter != "Все статусы":
+            if self._stage_filter == "jira":
+                result = [
+                    d for d in result
+                    if d.ai_response and d.ai_response.jira_issue_key
+                ]
+            else:
+                result = [
+                    d for d in result
+                    if d.stage == self._stage_filter
+                    and not (d.ai_response and d.ai_response.jira_issue_key)
+                ]
+        return result
 
     def _on_filter_change(self, e: ft.ControlEvent) -> None:
         self._filter_value = e.control.value or "Все команды"
         if self._drafts_list_column is not None:
-            filtered = self._filtered_drafts()
-            self._drafts_list_column.controls = [self._build_draft_card(d) for d in filtered]
+            self._drafts_list_column.controls = [self._build_draft_card(d) for d in self._filtered_drafts()]
+            self.page.update()
+
+    def _on_stage_filter_change(self, e: ft.ControlEvent) -> None:
+        self._stage_filter = e.control.value or "Все статусы"
+        if self._drafts_list_column is not None:
+            self._drafts_list_column.controls = [self._build_draft_card(d) for d in self._filtered_drafts()]
             self.page.update()
 
     def _build_draft_card(self, draft: Draft) -> ft.Control:
