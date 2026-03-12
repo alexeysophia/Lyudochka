@@ -637,6 +637,11 @@ class ResultCard:
         if self._jira_btn is None or self._jira_action_row is None:
             return
 
+        # Validate release selection before disabling the button
+        if self._release_dropdown is not None and not self._release_dropdown.value:
+            error_snack(self.page, "Релиз не выбран")
+            return
+
         self._jira_btn.disabled = True
         self._jira_btn.content = "Создаю задачу..."
         self._jira_btn.update()
