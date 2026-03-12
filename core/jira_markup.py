@@ -12,14 +12,8 @@ def markdown_to_jira(text: str) -> str:
         hashes = "#" * level
         text = re.sub(rf"^{hashes}\s+(.+)$", rf"h{level}. \1", text, flags=re.MULTILINE)
 
-    # 2. Bold **text** → *text*  (placeholder trick to survive italic pass)
-    text = re.sub(r"\*\*(.+?)\*\*", r"§B§\1§B§", text, flags=re.DOTALL)
-
-    # 3. Italic *text* → _text_
-    text = re.sub(r"(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)", r"_\1_", text, flags=re.DOTALL)
-
-    # 4. Restore bold placeholders
-    text = text.replace("§B§", "*")
+    # 2. Markdown bold **text** → Jira bold *text*
+    text = re.sub(r"\*\*(.+?)\*\*", r"*\1*", text, flags=re.DOTALL)
 
     # 5. Inline code `text` → {{text}}
     text = re.sub(r"`([^`]+)`", r"{{\1}}", text)
