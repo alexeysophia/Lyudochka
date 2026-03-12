@@ -30,6 +30,7 @@ class AIResponse:
     task_text: str = ""                   # Formatted task body (if ready)
     task_title: str = ""                  # Task title (if ready)
     jira_params: dict = field(default_factory=dict)   # project, type, labels (if ready)
+    epic_name: str = ""                               # Epic Name (max 3 words, only for Epic tasks)
     questions: list[str] = field(default_factory=list)  # Clarifying questions (if need_clarification)
     jira_issue_key: str = ""  # e.g. "VKPCP-123", filled after successful Jira creation
 

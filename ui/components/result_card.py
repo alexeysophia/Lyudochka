@@ -53,6 +53,11 @@ class ResultCard:
         self._new_label_field: ft.TextField | None = None
         self._header_icon_ctrl: ft.Icon | None = None
         self._header_text_ctrl: ft.Text | None = None
+        self._epic_name: str = response.epic_name
+        self._epic_name_edit_mode: bool = False
+        self._epic_name_container: ft.Container | None = None
+        self._epic_name_edit_field: ft.TextField | None = None
+        self._epic_name_edit_btn: ft.IconButton | None = None
 
     # ------------------------------------------------------------------
     # Formatting helpers
@@ -213,6 +218,32 @@ class ResultCard:
                 self._title_container,
             ]
 
+        is_epic = jira.get("type", "").lower() == "epic"
+        if is_epic:
+            self._epic_name_edit_btn = ft.IconButton(
+                icon=ft.Icons.EDIT_OUTLINED,
+                tooltip="Редактировать Epic Name",
+                on_click=self._toggle_epic_name_edit,
+                visible=not in_jira,
+            )
+            self._epic_name_container = ft.Container(
+                padding=ft.padding.symmetric(vertical=8, horizontal=12),
+                bgcolor=ft.Colors.SURFACE_CONTAINER,
+                border_radius=8,
+                content=self._build_epic_name_content(),
+            )
+            controls += [
+                ft.Row(
+                    controls=[
+                        self._epic_name_edit_btn,
+                        ft.Text("Epic Name", size=11, color=ft.Colors.GREY_600),
+                    ],
+                    vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                    spacing=0,
+                ),
+                self._epic_name_container,
+            ]
+
         if self._task_text:
             self._text_container = ft.Container(
                 padding=12,
@@ -346,6 +377,48 @@ class ResultCard:
         except (json.JSONDecodeError, TypeError):
             pass
         return raw
+
+    def _build_epic_name_content(self) -> ft.Control:
+        if self._epic_name_edit_mode:
+            self._epic_name_edit_field = ft.TextField(
+                value=self._epic_name,
+                border=ft.InputBorder.NONE,
+                expand=True,
+                text_size=15,
+                content_padding=ft.padding.all(0),
+                hint_text="Не более 3 слов",
+            )
+            return self._epic_name_edit_field
+        else:
+            self._epic_name_edit_field = None
+            return ft.Text(
+                self._epic_name or "—",
+                size=15,
+                weight=ft.FontWeight.W_500,
+                selectable=True,
+            )
+
+    def _toggle_epic_name_edit(self, e: ft.ControlEvent) -> None:
+        if self._epic_name_edit_mode:
+            if self._epic_name_edit_field is not None:
+                self._epic_name = self._epic_name_edit_field.value or self._epic_name
+            self.response.epic_name = self._epic_name
+            self._epic_name_edit_mode = False
+            if self._epic_name_edit_btn:
+                self._epic_name_edit_btn.icon = ft.Icons.EDIT_OUTLINED
+                self._epic_name_edit_btn.tooltip = "Редактировать Epic Name"
+                self._epic_name_edit_btn.update()
+        else:
+            self._epic_name_edit_mode = True
+            if self._epic_name_edit_btn:
+                self._epic_name_edit_btn.icon = ft.Icons.CHECK
+                self._epic_name_edit_btn.tooltip = "Сохранить Epic Name"
+                self._epic_name_edit_btn.update()
+        if self._epic_name_container is not None:
+            self._epic_name_container.content = self._build_epic_name_content()
+            self._epic_name_container.update()
+        if self._epic_name_edit_mode and self._epic_name_edit_field is not None:
+            self.page.run_task(self._epic_name_edit_field.focus)
 
     def _build_jira_chips(self) -> list[ft.Control]:
         jira = self.response.jira_params
@@ -534,6 +607,7 @@ class ResultCard:
                 issue_type_id=jira_params.get("type_id", ""),
                 labels=jira_params.get("labels", []),
                 extra_fields=jira_params.get("extra_fields"),
+                epic_name=self._epic_name,
             )
         except Exception as exc:
             log.exception("Jira issue creation failed")

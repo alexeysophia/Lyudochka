@@ -49,6 +49,7 @@ def _build_response(data: dict) -> AIResponse:
             task_title=data.get("task_title", ""),
             task_text=markdown_to_jira(data.get("task_text", "")),
             jira_params=data.get("jira_params", {}),
+            epic_name=data.get("epic_name", ""),
         )
 
     if status == "need_clarification":

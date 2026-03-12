@@ -151,6 +151,7 @@ async def create_jira_issue(
     issue_type_id: str = "",
     labels: list[str] | None = None,
     extra_fields: dict | None = None,
+    epic_name: str = "",
 ) -> str:
     """Create a Jira issue via REST API v2. Returns the issue key (e.g. 'PROJ-123')."""
     url = f"{jira_url.rstrip('/')}/rest/api/2/issue"
@@ -165,7 +166,7 @@ async def create_jira_issue(
         "issuetype": issuetype_value,
     }
     if issue_type.lower() == "epic":
-        fields["customfield_15501"] = summary  # Epic Name — обязательное поле для Epic
+        fields["customfield_15501"] = epic_name if epic_name else summary  # Epic Name
     if labels:
         fields["labels"] = labels
     if extra_fields:
