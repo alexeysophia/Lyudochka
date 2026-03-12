@@ -103,6 +103,12 @@ class TeamEditor:
         # Forward declaration — assigned below after _build_add_row is defined
         _add_field_row_container: ft.Container
 
+        # --- Release field state ---
+        _track_release: list[bool] = [self.team.track_release if self.team else False]
+        _release_field_id: list[str] = [self.team.release_field_id if self.team else ""]
+        _release_insight_loading: list[bool] = [False]
+        _release_section_ref: list[ft.Container | None] = [None]
+
         async def _do_fetch_meta() -> None:
             proj_key = (project_field.value or "").strip().upper()
             if not proj_key:
@@ -159,6 +165,11 @@ class TeamEditor:
             fetch_status.value = f"Получено: {len(_jira_issue_types)} типов, {len(_jira_fields)} полей"
             fetch_status.color = ft.Colors.GREEN_700
             fetch_status.update()
+
+            # Rebuild release section — field list may have changed
+            if _release_section_ref[0] is not None:
+                _release_section_ref[0].content = _build_release_section()
+                _release_section_ref[0].update()
 
         fetch_btn.on_click = lambda e: self.page.run_task(_do_fetch_meta)
 
@@ -747,6 +758,150 @@ class TeamEditor:
         _extra_fields_column = ft.Column(controls=_build_field_rows(), spacing=6)
         _add_field_row_container = ft.Container(content=_build_add_row())
 
+        # --- Release field section ---
+
+        def _get_release_eligible_fields() -> list[dict]:
+            """Fields with known allowed_values or Insight fields (eligible for release picker)."""
+            return [
+                f for f in _jira_fields
+                if f.get("allowed_values") or f.get("insight", False)
+            ]
+
+        def _build_release_section() -> ft.Control:
+            is_checked = _track_release[0]
+            fields = _get_release_eligible_fields()
+            cur_fid = _release_field_id[0]
+
+            # If previously selected field is no longer eligible, reset
+            if cur_fid and cur_fid not in {f["id"] for f in fields}:
+                cur_fid = ""
+                _release_field_id[0] = ""
+
+            cur_fmeta: dict | None = (
+                next((f for f in _jira_fields if f["id"] == cur_fid), None)
+                if cur_fid else None
+            )
+            is_insight = cur_fmeta is not None and cur_fmeta.get("insight", False)
+            has_values = bool(cur_fmeta and cur_fmeta.get("allowed_values"))
+            is_loading = _release_insight_loading[0]
+
+            def on_release_field_select(e: ft.ControlEvent) -> None:
+                _release_field_id[0] = e.control.value or ""
+                if _release_section_ref[0] is not None:
+                    _release_section_ref[0].content = _build_release_section()
+                    _release_section_ref[0].update()
+
+            def on_release_checkbox(e: ft.ControlEvent) -> None:
+                _track_release[0] = bool(e.control.value)
+                if _release_section_ref[0] is not None:
+                    _release_section_ref[0].content = _build_release_section()
+                    _release_section_ref[0].update()
+
+            field_dd = ft.Dropdown(
+                options=[ft.dropdown.Option(f["id"], f["name"]) for f in fields],
+                value=cur_fid or None,
+                hint_text=(
+                    "Выберите поле для релиза"
+                    if fields
+                    else ("Сначала получите поля из Jira ↑" if not _jira_fields else "Нет полей со справочниками")
+                ),
+                dense=True,
+                expand=True,
+                disabled=not is_checked or not bool(_jira_fields),
+                on_select=on_release_field_select,
+            )
+
+            row_controls: list[ft.Control] = [field_dd]
+
+            if is_checked and cur_fid and is_insight and not has_values:
+                if is_loading:
+                    row_controls.append(
+                        ft.ProgressRing(width=18, height=18, stroke_width=2)
+                    )
+                else:
+                    _captured_fid = cur_fid
+                    _captured_fmeta = cur_fmeta
+
+                    async def _do_fetch_release_insight() -> None:
+                        _release_insight_loading[0] = True
+                        if _release_section_ref[0] is not None:
+                            _release_section_ref[0].content = _build_release_section()
+                            _release_section_ref[0].update()
+                        try:
+                            settings = load_settings()
+                            if not settings.jira_url or not settings.jira_token:
+                                raise ValueError("Настройте подключение к Jira в Настройках")
+                            objects = await get_insight_objects(
+                                settings.jira_url, settings.jira_token,
+                                _captured_fmeta["name"], _captured_fid,
+                            )
+                            idx = next(
+                                (i for i, f in enumerate(_jira_fields) if f["id"] == _captured_fid),
+                                None,
+                            )
+                            if idx is not None:
+                                _jira_fields[idx]["allowed_values"] = objects
+                                _jira_fields[idx]["multi"] = True
+                        except Exception:
+                            # Remove field from eligible list and reset selection
+                            for i, f in enumerate(_jira_fields):
+                                if f["id"] == _captured_fid:
+                                    _jira_fields.pop(i)
+                                    break
+                            _release_field_id[0] = ""
+                            error_snack(self.page, "Для этого поля нет справочника")
+                        _release_insight_loading[0] = False
+                        if _release_section_ref[0] is not None:
+                            _release_section_ref[0].content = _build_release_section()
+                            _release_section_ref[0].update()
+
+                    row_controls.append(
+                        ft.ElevatedButton(
+                            "Получить значения",
+                            icon=ft.Icons.CLOUD_DOWNLOAD_OUTLINED,
+                            on_click=lambda e: self.page.run_task(_do_fetch_release_insight),
+                        )
+                    )
+
+            sub_controls: list[ft.Control] = [
+                ft.Row(
+                    controls=row_controls,
+                    vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                    spacing=6,
+                ),
+            ]
+
+            if is_checked and cur_fmeta and has_values:
+                values_str = "; ".join(
+                    av["name"] for av in cur_fmeta["allowed_values"]
+                )
+                if len(values_str) > 255:
+                    values_str = values_str[:252] + "..."
+                sub_controls.append(
+                    ft.Text(values_str, size=11, color=ft.Colors.GREY_600, italic=True)
+                )
+
+            return ft.Column(
+                controls=[
+                    ft.Checkbox(
+                        label="Указывать релиз",
+                        value=is_checked,
+                        on_change=on_release_checkbox,
+                    ),
+                    ft.Column(
+                        controls=sub_controls,
+                        spacing=6,
+                        visible=is_checked,
+                        horizontal_alignment=ft.CrossAxisAlignment.STRETCH,
+                    ),
+                ],
+                spacing=4,
+                horizontal_alignment=ft.CrossAxisAlignment.STRETCH,
+            )
+
+        _release_section_container = ft.Container(content=_build_release_section())
+        _release_section_ref[0] = _release_section_container
+
         _extra_jira_help = (
             "Здесь можно задать дополнительные поля Jira, которые будут автоматически "
             "заполняться при создании задачи.\n\n"
@@ -885,6 +1040,8 @@ class TeamEditor:
                 extra_jira_fields=dict(_extra_fields),
                 jira_fields_meta=list(_jira_fields),
                 jira_issue_types_meta=list(_jira_issue_types),
+                track_release=_track_release[0],
+                release_field_id=_release_field_id[0] if _track_release[0] else "",
             )
             save_team(new_team)
             _restore_keyboard()
@@ -946,6 +1103,7 @@ class TeamEditor:
                         _rules_area,
                         context_field,
                         extra_jira_section,
+                        _release_section_container,
                         error_text,
                     ],
                     spacing=12,

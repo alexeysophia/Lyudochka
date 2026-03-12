@@ -58,6 +58,9 @@ class ResultCard:
         self._epic_name_container: ft.Container | None = None
         self._epic_name_edit_field: ft.TextField | None = None
         self._epic_name_edit_btn: ft.IconButton | None = None
+        self._release_dropdown: ft.Dropdown | None = None
+        self._release_field_id: str = ""
+        self._release_field_meta: dict | None = None
 
     # ------------------------------------------------------------------
     # Formatting helpers
@@ -283,6 +286,10 @@ class ResultCard:
             self._jira_params_row,
         ]
 
+        release_section = self._build_release_section()
+        if release_section is not None:
+            controls.append(release_section)
+
         self._new_label_field = ft.TextField(
             hint_text="Новый тег",
             dense=True,
@@ -419,6 +426,46 @@ class ResultCard:
             self._epic_name_container.update()
         if self._epic_name_edit_mode and self._epic_name_edit_field is not None:
             self.page.run_task(self._epic_name_edit_field.focus)
+
+    def _build_release_section(self) -> ft.Control | None:
+        """Build release picker section; returns None if release field not configured."""
+        project_key = self.response.jira_params.get("project", "")
+        teams = load_all_teams()
+        team = next((t for t in teams if t.jira_project == project_key), None)
+        if team is None or not team.track_release or not team.release_field_id:
+            return None
+        fmeta = next(
+            (f for f in team.jira_fields_meta if f["id"] == team.release_field_id),
+            None,
+        )
+        if fmeta is None or not fmeta.get("allowed_values"):
+            return None
+        self._release_field_id = team.release_field_id
+        self._release_field_meta = fmeta
+        in_jira = bool(self.response.jira_issue_key)
+
+        def on_release_select(e: ft.ControlEvent) -> None:
+            pass  # value is read from dropdown at create time
+
+        self._release_dropdown = ft.Dropdown(
+            options=[
+                ft.dropdown.Option(av["id"], av["name"])
+                for av in fmeta["allowed_values"]
+            ],
+            hint_text="Выберите релиз...",
+            dense=True,
+            expand=True,
+            disabled=in_jira,
+            on_select=on_release_select,
+        )
+        return ft.Column(
+            controls=[
+                ft.Text("Релиз", size=11, color=ft.Colors.GREY_600),
+                self._release_dropdown,
+            ],
+            spacing=4,
+            horizontal_alignment=ft.CrossAxisAlignment.STRETCH,
+        )
 
     def _build_jira_chips(self) -> list[ft.Control]:
         jira = self.response.jira_params
@@ -596,6 +643,22 @@ class ResultCard:
 
         settings = load_settings()
         jira_params = self.response.jira_params
+        # Merge release value into extra_fields if selected
+        merged_extra: dict = dict(jira_params.get("extra_fields") or {})
+        if (
+            self._release_dropdown is not None
+            and self._release_field_meta is not None
+            and self._release_dropdown.value
+        ):
+            vid = self._release_dropdown.value
+            is_insight = self._release_field_meta.get("insight", False)
+            is_multi = self._release_field_meta.get("multi", False)
+            if is_insight:
+                merged_extra[self._release_field_id] = json.dumps([{"key": vid}])
+            elif is_multi:
+                merged_extra[self._release_field_id] = json.dumps([{"id": vid}])
+            else:
+                merged_extra[self._release_field_id] = json.dumps({"id": vid})
         try:
             key = await create_jira_issue(
                 jira_url=settings.jira_url,
@@ -606,7 +669,7 @@ class ResultCard:
                 issue_type=jira_params.get("type", "Story"),
                 issue_type_id=jira_params.get("type_id", ""),
                 labels=jira_params.get("labels", []),
-                extra_fields=jira_params.get("extra_fields"),
+                extra_fields=merged_extra or None,
                 epic_name=self._epic_name,
             )
         except Exception as exc:

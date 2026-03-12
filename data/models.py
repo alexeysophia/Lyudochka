@@ -13,6 +13,8 @@ class Team:
     default_task_type_id: str = ""  # Numeric Jira issue type ID (e.g. "10003"); used instead of name if set
     jira_fields_meta: list = field(default_factory=list)   # [{id, name, multi, allowed_values}] from createmeta
     jira_issue_types_meta: list = field(default_factory=list)  # [{id, name}] from createmeta
+    track_release: bool = False          # Whether to show a release picker at task-creation time
+    release_field_id: str = ""           # ID of the Jira field used for release selection
 
 
 @dataclass
