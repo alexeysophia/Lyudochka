@@ -449,15 +449,12 @@ class ResultCard:
 
         self._release_dropdown = ft.Dropdown(
             options=[
-                ft.dropdown.Option(
-                    av["id"],
-                    av["name"][:30] if len(av["name"]) > 30 else av["name"],
-                )
+                ft.dropdown.Option(av["id"], av["name"])
                 for av in fmeta["allowed_values"]
             ],
             hint_text="Выберите релиз...",
             dense=True,
-            expand=True,
+            width=280,
             disabled=in_jira,
             on_select=on_release_select,
         )
