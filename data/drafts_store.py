@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+from datetime import datetime
 from pathlib import Path
 
 from core.jira_markup import markdown_to_jira
@@ -42,7 +43,11 @@ def save_draft(draft: Draft) -> None:
 
 def load_all_drafts() -> list[Draft]:
     result: list[Draft] = []
-    for path in _drafts_dir().glob("*.json"):
+    for path in sorted(
+        _drafts_dir().glob("*.json"),
+        key=lambda p: p.stat().st_mtime,
+        reverse=True,
+    ):
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
             ai_response: AIResponse | None = None
@@ -56,6 +61,9 @@ def load_all_drafts() -> list[Draft]:
                     questions=ar.get("questions", []),
                     jira_issue_key=ar.get("jira_issue_key", ""),
                 )
+            updated_at = datetime.fromtimestamp(
+                path.stat().st_mtime
+            ).isoformat(timespec="seconds")
             result.append(
                 Draft(
                     id=data["id"],
@@ -66,11 +74,11 @@ def load_all_drafts() -> list[Draft]:
                     questions=data.get("questions", []),
                     answers=data.get("answers", []),
                     ai_response=ai_response,
+                    updated_at=updated_at,
                 )
             )
         except Exception:
             pass
-    result.sort(key=lambda d: d.created_at, reverse=True)
     return result
 
 

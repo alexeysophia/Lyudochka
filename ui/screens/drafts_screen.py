@@ -137,9 +137,17 @@ class DraftsScreen:
 
         try:
             dt = datetime.fromisoformat(draft.created_at)
-            date_str = dt.strftime("%d.%m.%Y %H:%M")
+            created_str = dt.strftime("%d.%m.%Y %H:%M")
         except Exception:
-            date_str = draft.created_at
+            created_str = draft.created_at
+
+        updated_str = ""
+        if draft.updated_at:
+            try:
+                dt_upd = datetime.fromisoformat(draft.updated_at)
+                updated_str = dt_upd.strftime("%d.%m.%Y %H:%M")
+            except Exception:
+                updated_str = draft.updated_at
 
         preview = draft.user_input[:120] + (
             "..." if len(draft.user_input) > 120 else ""
@@ -182,7 +190,11 @@ class DraftsScreen:
                                 if jira_key else []
                             ),
                             ft.Text(
-                                date_str, size=12, color=ft.Colors.GREY_500
+                                f"Создана: {created_str}", size=12, color=ft.Colors.GREY_500
+                            ),
+                            *(
+                                [ft.Text(f"Изменена: {updated_str}", size=12, color=ft.Colors.GREY_500)]
+                                if updated_str and updated_str != created_str else []
                             ),
                         ],
                         vertical_alignment=ft.CrossAxisAlignment.CENTER,

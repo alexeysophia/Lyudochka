@@ -53,3 +53,4 @@ class Draft:
     questions: list[str] = field(default_factory=list)
     answers: list[list[str]] = field(default_factory=list)  # [[question, answer], ...]
     ai_response: AIResponse | None = None
+    updated_at: str = ""  # ISO datetime of last file modification; populated on load
