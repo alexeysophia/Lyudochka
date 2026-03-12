@@ -267,6 +267,10 @@ class ResultCard:
                 self._text_container,
             ]
 
+        release_section = self._build_release_section()
+        if release_section is not None:
+            controls.append(release_section)
+
         self._jira_params_row = ft.Row(controls=self._build_jira_chips(), wrap=True)
         controls += [
             ft.Row(
@@ -285,10 +289,6 @@ class ResultCard:
             ),
             self._jira_params_row,
         ]
-
-        release_section = self._build_release_section()
-        if release_section is not None:
-            controls.append(release_section)
 
         self._new_label_field = ft.TextField(
             hint_text="Новый тег",
@@ -449,7 +449,10 @@ class ResultCard:
 
         self._release_dropdown = ft.Dropdown(
             options=[
-                ft.dropdown.Option(av["id"], av["name"])
+                ft.dropdown.Option(
+                    av["id"],
+                    av["name"][:30] if len(av["name"]) > 30 else av["name"],
+                )
                 for av in fmeta["allowed_values"]
             ],
             hint_text="Выберите релиз...",
