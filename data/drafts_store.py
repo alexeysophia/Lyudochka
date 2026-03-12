@@ -42,11 +42,7 @@ def save_draft(draft: Draft) -> None:
 
 def load_all_drafts() -> list[Draft]:
     result: list[Draft] = []
-    for path in sorted(
-        _drafts_dir().glob("*.json"),
-        key=lambda p: p.stat().st_mtime,
-        reverse=True,
-    ):
+    for path in _drafts_dir().glob("*.json"):
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
             ai_response: AIResponse | None = None
@@ -74,6 +70,7 @@ def load_all_drafts() -> list[Draft]:
             )
         except Exception:
             pass
+    result.sort(key=lambda d: d.created_at, reverse=True)
     return result
 
 
