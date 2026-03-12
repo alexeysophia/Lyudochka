@@ -5,6 +5,7 @@ from typing import Callable
 import flet as ft
 
 from core.jira_client import get_insight_objects, get_project_meta
+from core.jira_markup import jira_to_md
 from data.models import Team
 from data.settings_store import load_settings
 from data.teams_store import delete_team, is_lead_taken, is_name_taken, save_team
@@ -280,7 +281,7 @@ class TeamEditor:
                     bgcolor=ft.Colors.SURFACE_CONTAINER,
                     border_radius=8,
                     content=ft.Markdown(
-                        value=_rules_text[0],
+                        value=jira_to_md(_rules_text[0]),
                         selectable=True,
                         extension_set=ft.MarkdownExtensionSet.GITHUB_WEB,
                         soft_line_break=True,

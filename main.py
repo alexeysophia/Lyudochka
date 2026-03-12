@@ -5,6 +5,7 @@ import flet as ft
 
 from core.logger import setup_logging
 from data.drafts_store import migrate_drafts_to_jira_markup
+from data.teams_store import migrate_teams_to_jira_markup
 from ui.app import AppShell
 
 log = logging.getLogger(__name__)
@@ -47,4 +48,5 @@ def main(page: ft.Page) -> None:
 if __name__ == "__main__":
     setup_logging()
     migrate_drafts_to_jira_markup()
+    migrate_teams_to_jira_markup()
     ft.run(main)

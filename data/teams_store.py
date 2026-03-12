@@ -1,8 +1,12 @@
 import json
+import logging
 import os
 from pathlib import Path
 
+from core.jira_markup import markdown_to_jira
 from data.models import Team
+
+log = logging.getLogger(__name__)
 
 
 def _teams_dir() -> Path:
@@ -86,6 +90,27 @@ def is_lead_taken(team_lead: str, exclude_name: str = "") -> bool:
         t.team_lead.strip().lower() == needle and t.name.strip().lower() != exclude
         for t in load_all_teams()
     )
+
+
+def migrate_teams_to_jira_markup() -> None:
+    """One-time migration: convert Markdown rules to Jira wiki markup in all teams."""
+    _MD_PATTERNS = ("**", "## ", "---")
+    converted = 0
+    for json_file in _teams_dir().glob("*.json"):
+        try:
+            with open(json_file, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            rules = data.get("rules", "")
+            if not rules or not any(p in rules for p in _MD_PATTERNS):
+                continue
+            data["rules"] = markdown_to_jira(rules)
+            with open(json_file, "w", encoding="utf-8") as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+            converted += 1
+        except Exception as exc:
+            log.warning("migrate_teams: skipped %s: %s", json_file.name, exc)
+    if converted:
+        log.info("migrate_teams_to_jira_markup: converted %d team(s)", converted)
 
 
 def delete_team(team_name: str) -> None:
