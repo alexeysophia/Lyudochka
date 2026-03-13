@@ -33,6 +33,7 @@ def load_settings() -> Settings:
             gemini_api_key=data.get("gemini_api_key", ""),
             jira_url=data.get("jira_url", ""),
             jira_token=data.get("jira_token", ""),
+            draft_retention_days=int(data.get("draft_retention_days", 90)),
         )
     except (json.JSONDecodeError, OSError):
         return Settings()
@@ -46,6 +47,7 @@ def save_settings(settings: Settings) -> None:
         "gemini_api_key": settings.gemini_api_key,
         "jira_url": settings.jira_url,
         "jira_token": settings.jira_token,
+        "draft_retention_days": settings.draft_retention_days,
     }
     with open(path, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)

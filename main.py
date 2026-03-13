@@ -4,7 +4,8 @@ import os
 import flet as ft
 
 from core.logger import setup_logging
-from data.drafts_store import migrate_drafts_to_jira_markup
+from data.drafts_store import cleanup_old_drafts, migrate_drafts_to_jira_markup
+from data.settings_store import load_settings
 from data.teams_store import migrate_teams_to_jira_markup
 from ui.app import AppShell
 
@@ -49,4 +50,5 @@ if __name__ == "__main__":
     setup_logging()
     migrate_drafts_to_jira_markup()
     migrate_teams_to_jira_markup()
+    cleanup_old_drafts(load_settings().draft_retention_days)
     ft.run(main)

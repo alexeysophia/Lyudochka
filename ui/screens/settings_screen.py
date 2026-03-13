@@ -52,15 +52,29 @@ class SettingsScreen:
             width=520,
         )
 
+        retention_field = ft.TextField(
+            label="Удалять задачи старше (дней)",
+            value=str(settings.draft_retention_days),
+            width=280,
+            keyboard_type=ft.KeyboardType.NUMBER,
+            hint_text="например: 90",
+        )
+
         status_text = ft.Text("", color=ft.Colors.GREEN)
 
         def save_clicked(e: ft.ControlEvent) -> None:
+            try:
+                retention_days = int(retention_field.value or "90")
+                retention_days = max(1, retention_days)
+            except ValueError:
+                retention_days = 90
             new_settings = Settings(
                 default_llm=llm_dropdown.value or "anthropic",
                 anthropic_api_key=anthropic_key.value or "",
                 gemini_api_key=gemini_key.value or "",
                 jira_url=jira_url_field.value or "",
                 jira_token=jira_token_field.value or "",
+                draft_retention_days=retention_days,
             )
             save_settings(new_settings)
             status_text.value = "✓ Настройки сохранены"
@@ -89,6 +103,9 @@ class SettingsScreen:
                     ft.Text("Подключение к Jira", size=15, weight=ft.FontWeight.W_500),
                     jira_url_field,
                     jira_token_field,
+                    ft.Container(height=8),
+                    ft.Text("Сохранённые задачи", size=15, weight=ft.FontWeight.W_500),
+                    retention_field,
                     ft.Container(height=8),
                     save_btn,
                     status_text,

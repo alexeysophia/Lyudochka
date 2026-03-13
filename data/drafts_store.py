@@ -1,7 +1,7 @@
 import json
 import logging
 import os
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from core.jira_markup import markdown_to_jira
@@ -110,3 +110,23 @@ def delete_draft(draft_id: str) -> None:
     path = _drafts_dir() / f"{draft_id}.json"
     if path.exists():
         path.unlink()
+
+
+def cleanup_old_drafts(retention_days: int) -> int:
+    """Delete draft files not modified for more than retention_days days.
+    Returns the number of deleted drafts."""
+    if retention_days <= 0:
+        return 0
+    cutoff = datetime.now(tz=timezone.utc) - timedelta(days=retention_days)
+    deleted = 0
+    for path in _drafts_dir().glob("*.json"):
+        try:
+            mtime = datetime.fromtimestamp(path.stat().st_mtime, tz=timezone.utc)
+            if mtime < cutoff:
+                path.unlink()
+                deleted += 1
+        except OSError:
+            pass
+    if deleted:
+        log.info("cleanup_old_drafts: deleted %d draft(s) older than %d days", deleted, retention_days)
+    return deleted

@@ -24,6 +24,7 @@ class Settings:
     gemini_api_key: str = ""
     jira_url: str = ""               # e.g. "https://jira.company.com"
     jira_token: str = ""             # Personal Access Token
+    draft_retention_days: int = 90   # Auto-delete drafts not modified for this many days
 
 
 @dataclass
