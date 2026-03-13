@@ -297,7 +297,7 @@ class MainScreen:
             None,
         )
 
-    async def _on_generate_clicked(self, e: ft.ControlEvent) -> None:
+    def _on_generate_clicked(self, e: ft.ControlEvent) -> None:
         if not self._selected_team:
             self._show_error("Выберите команду")
             return
@@ -310,13 +310,16 @@ class MainScreen:
             self._generate_btn.disabled = True
             self._generate_btn.update()
 
-        self._user_input_value = raw.strip()
+        self.page.run_task(self._do_generate, raw.strip())
+
+    async def _do_generate(self, raw: str) -> None:
+        self._user_input_value = raw
         self._stage = "input"
         self._current_questions = []
         self._current_questions_form = None
         self._current_ai_response = None
         force = bool(self._skip_clarification_cb and self._skip_clarification_cb.value)
-        await self._run_generation(self._user_input_value, None, force)
+        await self._run_generation(raw, None, force)
 
     def _clone_draft_clicked(self, e: ft.ControlEvent) -> None:
         if not self._selected_team or self._current_ai_response is None:
