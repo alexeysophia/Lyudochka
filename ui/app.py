@@ -1,6 +1,7 @@
 import flet as ft
 
 from data.models import Draft
+from ui.screens.docs_screen import DocsScreen
 from ui.screens.drafts_screen import DraftsScreen
 from ui.screens.main_screen import MainScreen
 from ui.screens.settings_screen import SettingsScreen
@@ -19,6 +20,7 @@ class AppShell:
         self._teams_screen = TeamsScreen(page, on_change=self._on_teams_changed)
         self._terms_screen = TermsScreen(page)
         self._settings_screen = SettingsScreen(page)
+        self._docs_screen = DocsScreen(page)
 
         self._screens: list = [
             self._main_screen,      # 0 — Создать задачу
@@ -26,6 +28,7 @@ class AppShell:
             self._teams_screen,     # 2 — Команды
             self._terms_screen,     # 3 — Термины
             self._settings_screen,  # 4 — Настройки
+            self._docs_screen,      # 5 — Документация
         ]
 
         self._nav_rail = ft.NavigationRail(
@@ -58,6 +61,11 @@ class AppShell:
                     icon=ft.Icons.SETTINGS_OUTLINED,
                     selected_icon=ft.Icons.SETTINGS,
                     label="Настройки",
+                ),
+                ft.NavigationRailDestination(
+                    icon=ft.Icons.HELP_OUTLINE,
+                    selected_icon=ft.Icons.HELP,
+                    label="Документация",
                 ),
             ],
             on_change=self._on_nav_change,
