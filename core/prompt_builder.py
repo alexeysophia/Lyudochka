@@ -1,4 +1,5 @@
 from data.models import Team
+from data.terms_store import load_terms
 
 _SYSTEM_PROMPT_TEMPLATE = """\
 Ты — эксперт по составлению задач в Jira. Твоя задача — помочь оформить задачу для команды "{team_name}" строго по их правилам.
@@ -55,7 +56,7 @@ _SYSTEM_PROMPT_TEMPLATE = """\
 
 def build_system_prompt(team: Team) -> str:
     """Assemble the system prompt from team rules."""
-    return _SYSTEM_PROMPT_TEMPLATE.format(
+    prompt = _SYSTEM_PROMPT_TEMPLATE.format(
         team_name=team.name,
         context=team.context or "(не указан)",
         rules=team.rules or "(правила не заданы)",
@@ -63,6 +64,16 @@ def build_system_prompt(team: Team) -> str:
         jira_project=team.jira_project,
         default_task_type=team.default_task_type,
     )
+    if team.use_glossary:
+        terms = load_terms()
+        if terms:
+            lines = "\n".join(f"- {t.name}: {t.description}" for t in terms)
+            prompt += (
+                "\n\n## Термины и сокращения компании:\n"
+                + lines
+                + "\n\nИспользуй эти термины и сокращения при составлении задачи."
+            )
+    return prompt
 
 
 def build_user_message(

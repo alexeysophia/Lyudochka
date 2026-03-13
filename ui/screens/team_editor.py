@@ -173,6 +173,11 @@ class TeamEditor:
 
         fetch_btn.on_click = lambda e: self.page.run_task(_do_fetch_meta)
 
+        use_glossary_checkbox = ft.Checkbox(
+            label="Учитывать сохранённые термины и сокращения",
+            value=self.team.use_glossary if self.team else True,
+        )
+
         context_field = ft.TextField(
             label="Контекст команды",
             value=self.team.context if self.team else "",
@@ -1042,6 +1047,7 @@ class TeamEditor:
                 jira_issue_types_meta=list(_jira_issue_types),
                 track_release=_track_release[0],
                 release_field_id=_release_field_id[0] if _track_release[0] else "",
+                use_glossary=bool(use_glossary_checkbox.value),
             )
             save_team(new_team)
             _restore_keyboard()
@@ -1102,6 +1108,7 @@ class TeamEditor:
                         ),
                         _rules_area,
                         context_field,
+                        use_glossary_checkbox,
                         extra_jira_section,
                         _release_section_container,
                         error_text,

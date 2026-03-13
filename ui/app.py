@@ -5,6 +5,7 @@ from ui.screens.drafts_screen import DraftsScreen
 from ui.screens.main_screen import MainScreen
 from ui.screens.settings_screen import SettingsScreen
 from ui.screens.teams_screen import TeamsScreen
+from ui.screens.terms_screen import TermsScreen
 
 
 class AppShell:
@@ -16,13 +17,15 @@ class AppShell:
         self._main_screen = MainScreen(page)
         self._drafts_screen = DraftsScreen(page, on_restore=self._on_restore_draft)
         self._teams_screen = TeamsScreen(page, on_change=self._on_teams_changed)
+        self._terms_screen = TermsScreen(page)
         self._settings_screen = SettingsScreen(page)
 
         self._screens: list = [
             self._main_screen,      # 0 — Создать задачу
             self._drafts_screen,    # 1 — Сохраненные
             self._teams_screen,     # 2 — Команды
-            self._settings_screen,  # 3 — Настройки
+            self._terms_screen,     # 3 — Термины
+            self._settings_screen,  # 4 — Настройки
         ]
 
         self._nav_rail = ft.NavigationRail(
@@ -45,6 +48,11 @@ class AppShell:
                     icon=ft.Icons.GROUPS_OUTLINED,
                     selected_icon=ft.Icons.GROUPS,
                     label="Команды",
+                ),
+                ft.NavigationRailDestination(
+                    icon=ft.Icons.MENU_BOOK_OUTLINED,
+                    selected_icon=ft.Icons.MENU_BOOK,
+                    label="Термины",
                 ),
                 ft.NavigationRailDestination(
                     icon=ft.Icons.SETTINGS_OUTLINED,

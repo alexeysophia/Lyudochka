@@ -47,6 +47,7 @@ def load_all_teams() -> list[Team]:
                     jira_issue_types_meta=data.get("jira_issue_types_meta", []),
                     track_release=data.get("track_release", False),
                     release_field_id=data.get("release_field_id", ""),
+                    use_glossary=data.get("use_glossary", True),
                 )
             )
         except (json.JSONDecodeError, KeyError, OSError):
@@ -71,6 +72,7 @@ def save_team(team: Team) -> None:
         "jira_issue_types_meta": team.jira_issue_types_meta,
         "track_release": team.track_release,
         "release_field_id": team.release_field_id,
+        "use_glossary": team.use_glossary,
     }
     with open(path, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)

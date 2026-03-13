@@ -15,6 +15,13 @@ class Team:
     jira_issue_types_meta: list = field(default_factory=list)  # [{id, name}] from createmeta
     track_release: bool = False          # Whether to show a release picker at task-creation time
     release_field_id: str = ""           # ID of the Jira field used for release selection
+    use_glossary: bool = True            # Whether to include company glossary in AI prompt
+
+
+@dataclass
+class Term:
+    name: str           # Term or abbreviation
+    description: str    # Its meaning / explanation
 
 
 @dataclass
