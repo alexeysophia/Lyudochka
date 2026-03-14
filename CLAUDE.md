@@ -28,12 +28,14 @@ python main.py
 
 ```
 main.py                      # Entry point: ft.run(main), window setup, icon build
-ui/app.py                    # AppShell: NavigationRail + 4 screens
+ui/app.py                    # AppShell: NavigationRail + 6 screens
 ui/screens/main_screen.py    # Task creation flow (voice + text input, generation, questions)
 ui/screens/drafts_screen.py  # Saved drafts list (restore/delete, team filter)
 ui/screens/teams_screen.py   # Team list (add/edit/delete)
 ui/screens/team_editor.py    # AlertDialog form for create/edit team
 ui/screens/settings_screen.py # API keys, LLM selector, Jira config
+ui/screens/terms_screen.py   # Glossary/terms management (add/edit/delete Term entries)
+ui/screens/docs_screen.py    # Documentation screen (renders README.md via ft.Markdown)
 ui/components/result_card.py  # Ready task display + Jira creation button
 ui/components/questions_form.py # Clarifying questions + answer fields
 ui/snack.py                  # error_snack(page, message) helper; clipboard via subprocess clip
@@ -43,13 +45,15 @@ core/gemini_client.py        # async call_gemini() (uses asyncio.to_thread)
 core/prompt_builder.py       # build_system_prompt(team), build_user_message(input, answers)
 core/response_parser.py      # parse_ai_response(raw_text) → AIResponse
 core/jira_client.py          # async create_jira_issue(), get_project_meta(), get_insight_objects()
+core/jira_markup.py          # markdown_to_jira(text), jira_to_md(text) — bidirectional conversion
 core/audio_recorder.py       # AudioRecorder: start/stop/cancel → WAV via sounddevice
 core/voice_processor.py      # async process_voice() → VoiceResult via Gemini
 core/logger.py               # setup_logging() — call once at startup; logs to %APPDATA%\Lyudochka\lyudochka.log
-data/models.py               # Team, Settings, AIResponse, VoiceResult, Draft dataclasses
+data/models.py               # Team, Settings, AIResponse, VoiceResult, Draft, Term dataclasses
 data/settings_store.py       # load/save %APPDATA%\Lyudochka\settings.json
 data/teams_store.py          # load/save/delete %APPDATA%\Lyudochka\teams\{name}.json
 data/drafts_store.py         # save/load/delete %APPDATA%\Lyudochka\drafts\{id}.json
+data/terms_store.py          # load/save %APPDATA%\Lyudochka\terms.json
 ```
 
 ## Data Storage
@@ -90,8 +94,13 @@ Team(name, jira_project, default_task_type, rules, team_lead,
      extra_jira_fields={},        # saved custom field values e.g. {"customfield_123": "value"}
      default_task_type_id="",     # numeric issue type ID; used instead of name when set
      jira_fields_meta=[],         # [{id, name, multi, allowed_values, insight}] from createmeta
-     jira_issue_types_meta=[])    # [{id, name}] from createmeta
+     jira_issue_types_meta=[],    # [{id, name}] from createmeta
+     track_release=False,         # show release picker at task-creation time
+     release_field_id="",         # Jira field ID used for release selection
+     use_glossary=True)           # include saved Terms glossary in AI prompt
 ```
+
+**Term model**: `Term(name, description)` — stored in `%APPDATA%\Lyudochka\terms.json` as a flat list. Included in AI system prompt when `team.use_glossary=True`.
 
 **`jira_params` dict** (from AI JSON + used in `result_card.py`):
 ```python
@@ -116,6 +125,14 @@ Team(name, jira_project, default_task_type, rules, team_lead,
 **TeamEditor Jira meta**: calls `get_project_meta(jira_url, token, project_key)` on demand to populate issue type dropdown and extra-fields UI (dropdowns, multi-select chips, Insight pickers). Meta is saved back to `Team.jira_fields_meta` / `Team.jira_issue_types_meta`.
 
 **ResultCard edit mode**: clicking the edit icon (pencil) switches task description from `ft.Markdown` display to a `ft.TextField` with a Markdown formatting toolbar (bold/italic/code/underline/strikethrough/list buttons). Saves with check icon; `_task_text` holds the mutable value used for Jira creation.
+
+**Jira markup conversion** (`core/jira_markup.py`): `markdown_to_jira(text)` converts task text before sending to Jira (Markdown → Jira wiki syntax). `jira_to_md(text)` converts in the opposite direction for in-app preview. Used in `result_card.py` when creating the Jira issue.
+
+**Settings model** additional fields: `draft_retention_days=90` — auto-delete drafts not modified for this many days.
+
+**AIResponse** additional fields: `epic_name=""` (max 3 words, only for Epic tasks), `jira_issue_key=""` (e.g. `"PROJ-123"`, filled after successful Jira creation).
+
+**Draft** additional field: `updated_at=""` — ISO datetime of last file modification, populated on load (not stored in JSON, derived from file mtime).
 
 **Logging**: call `setup_logging()` from `core.logger` once in `main.py` before `ft.run()`. Use `logging.getLogger(__name__)` in every module. Log is cleared on each startup. Root logger = WARNING; `core`/`ui`/`data`/`__main__` loggers = DEBUG.
 

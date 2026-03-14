@@ -600,7 +600,7 @@ class MainScreen:
         if self._back_btn is not None:
             self._back_btn.visible = False
         if self._forward_btn is not None:
-            self._forward_btn.visible = bool(self._current_questions)
+            self._forward_btn.visible = bool(self._current_questions) or self._current_ai_response is not None
         if self._skip_btn is not None:
             self._skip_btn.visible = False
         if self._save_draft_btn is not None:
@@ -651,7 +651,17 @@ class MainScreen:
         self.page.update()
 
     def _on_forward_clicked(self, e: ft.ControlEvent) -> None:
-        """Forward from input → clarification; from clarification → ready."""
+        """Forward from input → clarification (or ready if no questions); from clarification → ready."""
+        if self._stage == "input" and not self._current_questions and self._current_ai_response is not None:
+            self._stage = "ready"
+            self._set_ready_view()
+            if self._result_area is not None:
+                self._result_area.controls = [
+                    ResultCard(self.page, self._current_ai_response, on_jira_created=self._on_jira_created).build()
+                ]
+            self.page.update()
+            return
+
         if self._stage == "input" and self._current_questions:
             self._stage = "clarification"
             initial_answers = [
