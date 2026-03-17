@@ -4,10 +4,10 @@ from typing import Callable
 
 import flet as ft
 
-from core.jira_client import get_insight_objects, get_project_meta
+from core.jira_client import get_insight_objects, get_link_types, get_project_meta
 from core.jira_markup import jira_to_md
 from data.models import Team
-from data.settings_store import load_settings
+from data.settings_store import load_settings, save_settings
 from data.teams_store import delete_team, is_lead_taken, is_name_taken, save_team
 from ui.snack import error_snack
 
@@ -134,6 +134,15 @@ class TeamEditor:
                 fetch_loading.visible = False
                 fetch_btn.update()
                 fetch_loading.update()
+
+            # Also fetch and persist link types (global, not project-specific)
+            try:
+                link_types = await get_link_types(settings.jira_url, settings.jira_token)
+                s = load_settings()
+                s.jira_link_types = link_types
+                save_settings(s)
+            except Exception:
+                pass  # non-critical — don't block team save
 
             _jira_issue_types.clear()
             _jira_issue_types.extend(meta["issue_types"])

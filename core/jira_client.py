@@ -213,6 +213,157 @@ async def create_jira_issue(
     return key
 
 
+async def get_link_types(jira_url: str, token: str) -> list[dict]:
+    """Fetch all issue link types available in the Jira instance.
+    Returns [{"id", "name", "inward", "outward"}].
+    """
+    url = f"{jira_url.rstrip('/')}/rest/api/2/issueLinkType"
+    headers = {"Authorization": f"Bearer {token}", "Accept": "application/json"}
+    try:
+        async with httpx.AsyncClient(verify=False, timeout=15.0) as client:
+            resp = await client.get(url, headers=headers)
+    except httpx.ConnectTimeout:
+        raise ValueError("Сервер Jira недоступен: превышено время подключения")
+    except httpx.TimeoutException:
+        raise ValueError("Сервер Jira не ответил вовремя (таймаут)")
+    except httpx.ConnectError as e:
+        raise ValueError(f"Не удалось подключиться к Jira: {e}")
+    if resp.status_code == 401:
+        raise ValueError("Jira: неверный токен (401 Unauthorized)")
+    if resp.status_code == 403:
+        raise ValueError("Jira: нет прав для просмотра типов связей (403 Forbidden)")
+    if resp.status_code >= 400:
+        raise ValueError(f"Jira {resp.status_code}: {resp.text[:200]}")
+    data = resp.json()
+    result = [
+        {
+            "id": lt["id"],
+            "name": lt["name"],
+            "inward": lt.get("inward", lt["name"]),
+            "outward": lt.get("outward", lt["name"]),
+        }
+        for lt in data.get("issueLinkTypes", [])
+    ]
+    log.debug("Loaded %d link types", len(result))
+    return result
+
+
+async def create_issue_link(
+    jira_url: str,
+    token: str,
+    link_type_id: str,
+    outward_issue: str,
+    inward_issue: str,
+) -> None:
+    """Create an issue link via Jira REST API v2.
+
+    outward_issue — the issue that "does" the relation (e.g. "blocks")
+    inward_issue  — the issue that "receives" the relation (e.g. "is blocked by")
+    Raises ValueError on any API error.
+    """
+    url = f"{jira_url.rstrip('/')}/rest/api/2/issueLink"
+    payload = {
+        "type": {"id": link_type_id},
+        "outwardIssue": {"key": outward_issue},
+        "inwardIssue": {"key": inward_issue},
+    }
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+    }
+    log.debug("Creating issue link: %s → %s (type %s)", outward_issue, inward_issue, link_type_id)
+    try:
+        async with httpx.AsyncClient(verify=False, timeout=30.0) as client:
+            resp = await client.post(url, json=payload, headers=headers)
+    except httpx.ConnectTimeout:
+        raise ValueError("Сервер Jira недоступен: превышено время подключения")
+    except httpx.TimeoutException:
+        raise ValueError("Сервер Jira не ответил вовремя (таймаут)")
+    except httpx.ConnectError as e:
+        raise ValueError(f"Не удалось подключиться к Jira: {e}")
+    if resp.status_code == 401:
+        raise ValueError("Неверный токен (401)")
+    if resp.status_code == 403:
+        raise ValueError("Нет прав для создания связи (403)")
+    if resp.status_code == 404:
+        raise ValueError(f"Задача не найдена (404)")
+    if resp.status_code >= 400:
+        try:
+            errors = resp.json().get("errors", {}) or resp.json().get("errorMessages", [])
+            detail = "; ".join(str(v) for v in errors.values()) if isinstance(errors, dict) else "; ".join(errors)
+        except Exception:
+            detail = resp.text[:200]
+        raise ValueError(detail or f"Jira {resp.status_code}")
+    log.info("Issue link created: %s → %s (type_id=%s)", outward_issue, inward_issue, link_type_id)
+
+
+async def update_jira_issue(
+    jira_url: str,
+    token: str,
+    issue_key: str,
+    extra_fields: dict[str, str],
+) -> None:
+    """Update a Jira issue via REST API v2.
+
+    extra_fields: {field_id: json_value_string} — values already in Jira API format
+    (e.g. '{"id":"10001"}' or '[{"id":"1"},{"id":"2"}]' or plain string).
+    Raises ValueError on any API error.
+    """
+    url = f"{jira_url.rstrip('/')}/rest/api/2/issue/{issue_key}"
+
+    fields: dict = {}
+    for fid, raw_val in extra_fields.items():
+        stripped = raw_val.strip()
+        if stripped.startswith(("[", "{")):
+            try:
+                fields[fid] = json.loads(stripped)
+                continue
+            except json.JSONDecodeError:
+                pass
+        fields[fid] = stripped
+
+    payload = {"fields": fields}
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+    }
+
+    log.debug("Jira update %s payload: %s", issue_key, payload)
+    try:
+        async with httpx.AsyncClient(verify=False, timeout=30.0) as client:
+            resp = await client.put(url, json=payload, headers=headers)
+    except httpx.ConnectTimeout:
+        raise ValueError("Сервер Jira недоступен: превышено время подключения")
+    except httpx.TimeoutException:
+        raise ValueError("Сервер Jira не ответил вовремя (таймаут)")
+    except httpx.ConnectError as e:
+        raise ValueError(f"Не удалось подключиться к Jira: {e}")
+
+    if resp.status_code == 204:
+        log.info("Jira issue updated: %s", issue_key)
+        return
+    if resp.status_code == 401:
+        raise ValueError("Неверный токен (401)")
+    if resp.status_code == 403:
+        raise ValueError("Нет прав для изменения задачи (403)")
+    if resp.status_code == 404:
+        raise ValueError(f"Задача {issue_key} не найдена (404)")
+    if resp.status_code >= 400:
+        try:
+            body = resp.json()
+            errors = body.get("errors", {}) or body.get("errorMessages", [])
+            detail = (
+                "; ".join(str(v) for v in errors.values())
+                if isinstance(errors, dict)
+                else "; ".join(errors)
+            )
+        except Exception:
+            detail = resp.text[:200]
+        raise ValueError(detail or f"Jira {resp.status_code}")
+
+
 async def _get_insight_field_config(
     jira_url: str, token: str, field_id: str
 ) -> list[int]:

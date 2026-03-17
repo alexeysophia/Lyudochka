@@ -34,6 +34,7 @@ def load_settings() -> Settings:
             jira_url=data.get("jira_url", ""),
             jira_token=data.get("jira_token", ""),
             draft_retention_days=int(data.get("draft_retention_days", 90)),
+            jira_link_types=data.get("jira_link_types", []),
         )
     except (json.JSONDecodeError, OSError):
         return Settings()
@@ -48,6 +49,7 @@ def save_settings(settings: Settings) -> None:
         "jira_url": settings.jira_url,
         "jira_token": settings.jira_token,
         "draft_retention_days": settings.draft_retention_days,
+        "jira_link_types": settings.jira_link_types,
     }
     with open(path, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)

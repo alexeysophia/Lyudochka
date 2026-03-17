@@ -32,6 +32,7 @@ class Settings:
     jira_url: str = ""               # e.g. "https://jira.company.com"
     jira_token: str = ""             # Personal Access Token
     draft_retention_days: int = 90   # Auto-delete drafts not modified for this many days
+    jira_link_types: list = field(default_factory=list)  # [{id, name, inward, outward}] cached globally
 
 
 @dataclass
